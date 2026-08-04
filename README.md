@@ -27,6 +27,15 @@ cp .env.example .env
 
 `.env`에 OpenAI와 Supabase 값을 채운 뒤 백엔드와 프론트엔드를 각각 실행합니다.
 
+## 백엔드 의존성 설치
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
 ## 백엔드 실행
 
 ```bash
@@ -39,6 +48,16 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```bash
 curl http://127.0.0.1:8000/health
 ```
+
+## 프론트엔드 실행
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+브라우저에서 `http://localhost:3000`으로 접속합니다.
 
 ## API
 

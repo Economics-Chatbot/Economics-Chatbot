@@ -102,7 +102,7 @@ export function Chat() {
                 );
               }
 
-              const { answer, failure_message, retrieved_terms } = message.response;
+              const { answer, failure_message } = message.response;
               return (
                 <div className="message assistantMessage" key={`${message.role}-${index}`}>
                   {answer ? (
@@ -139,25 +139,6 @@ export function Chat() {
                           {answer.source_name}
                           {answer.source_page ? `, ${answer.source_page}쪽` : ""}
                         </dd>
-                        {retrieved_terms.length > 1 && (
-                          <>
-                            <dt>검색 후보</dt>
-                            <dd>
-                              <div className="termTags">
-                                {retrieved_terms.map((term) => (
-                                  <button
-                                    disabled={isLoading}
-                                    key={term.term_name}
-                                    onClick={() => void openTerm(term.term_name)}
-                                    type="button"
-                                  >
-                                    {term.term_name}
-                                  </button>
-                                ))}
-                              </div>
-                            </dd>
-                          </>
-                        )}
                       </dl>
                     </>
                   ) : (
