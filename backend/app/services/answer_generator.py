@@ -57,7 +57,6 @@ async def generate_answer(query: str, term: RetrievedTerm) -> ChatAnswer:
             "one_line": "짧은 한 줄 정의",
             "easy_explanation": "경제 입문자가 이해할 수 있는 쉬운 설명",
             "example": "생활 속 예시",
-            "related_terms": ["관련 키워드"],
         },
     }
 
@@ -85,11 +84,7 @@ async def generate_answer(query: str, term: RetrievedTerm) -> ChatAnswer:
         one_line=str(parsed.get("one_line") or term.official_definition[:160]),
         easy_explanation=str(parsed.get("easy_explanation") or ""),
         example=str(parsed.get("example") or ""),
-        related_terms=[
-            str(item)
-            for item in parsed.get("related_terms", term.related_terms)
-            if str(item).strip()
-        ],
+        related_terms=term.related_terms,
         source_name=term.source_name,
         source_page=term.source_page,
     )

@@ -1,12 +1,3 @@
-export type RetrievedTerm = {
-  term_name: string;
-  official_definition: string;
-  source_name: string;
-  source_page: number | null;
-  related_terms: string[];
-  similarity: number | null;
-};
-
 export type ChatAnswer = {
   term: string;
   one_line: string;
@@ -20,7 +11,6 @@ export type ChatAnswer = {
 export type ChatResponse = {
   query: string;
   answer: ChatAnswer | null;
-  retrieved_terms: RetrievedTerm[];
   failure_message: string | null;
 };
 

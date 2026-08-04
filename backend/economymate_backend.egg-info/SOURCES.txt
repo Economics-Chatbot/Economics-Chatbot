@@ -3,6 +3,7 @@ app/__init__.py
 app/main.py
 app/core/__init__.py
 app/core/config.py
+app/core/supabase.py
 app/models/__init__.py
 app/models/schemas.py
 app/services/__init__.py

@@ -27,5 +27,4 @@ class ChatAnswer(BaseModel):
 class ChatResponse(BaseModel):
     query: str
     answer: ChatAnswer | None = None
-    retrieved_terms: list[RetrievedTerm] = Field(default_factory=list)
     failure_message: str | None = None
