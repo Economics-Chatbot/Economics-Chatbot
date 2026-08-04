@@ -10,7 +10,7 @@ class RetrievedTerm(BaseModel):
     official_definition: str
     source_name: str
     source_page: int | None = None
-    related_terms: list[str] = []
+    related_terms: list[str] = Field(default_factory=list)
     similarity: float | None = None
 
 
@@ -19,7 +19,7 @@ class ChatAnswer(BaseModel):
     one_line: str
     easy_explanation: str
     example: str
-    related_terms: list[str]
+    related_terms: list[str] = Field(default_factory=list)
     source_name: str
     source_page: int | None = None
 
@@ -27,6 +27,5 @@ class ChatAnswer(BaseModel):
 class ChatResponse(BaseModel):
     query: str
     answer: ChatAnswer | None = None
-    retrieved_terms: list[RetrievedTerm] = []
+    retrieved_terms: list[RetrievedTerm] = Field(default_factory=list)
     failure_message: str | None = None
-

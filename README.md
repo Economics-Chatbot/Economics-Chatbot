@@ -27,6 +27,35 @@ cp .env.example .env
 
 `.env`에 OpenAI와 Supabase 값을 채운 뒤 백엔드와 프론트엔드를 각각 실행합니다.
 
+## 백엔드 실행
+
+```bash
+cd backend
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+상태 확인:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+## API
+
+질문하기:
+
+```bash
+curl -X POST http://127.0.0.1:8000/questions \
+  -H "Content-Type: application/json" \
+  -d "{\"query\":\"물가가 계속 오르는 현상이 뭐야?\"}"
+```
+
+용어 조회:
+
+```bash
+curl http://127.0.0.1:8000/terms/인플레이션
+```
+
 ## 데이터 추출
 
 ```bash

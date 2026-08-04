@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import json
 import re
-import urllib.error
-import urllib.parse
-import urllib.request
 from typing import Any
 
+from openai import OpenAI
+
 from app.core.config import get_settings
+from app.core.supabase import get_supabase_client
 from app.models.schemas import RetrievedTerm
 
 
@@ -16,42 +15,21 @@ FAILURE_MESSAGE = (
     "경제용어나 경제 현상을 조금 더 구체적으로 질문해주세요."
 )
 
-
-def _post_json(url: str, headers: dict[str, str], payload: Any) -> Any:
-    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    request = urllib.request.Request(url, data=data, headers=headers, method="POST")
-
-    try:
-        with urllib.request.urlopen(request, timeout=120) as response:
-            body = response.read().decode("utf-8")
-            return json.loads(body) if body else None
-    except urllib.error.HTTPError as error:
-        message = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"POST {url} failed: HTTP {error.code} {message}") from error
+TERM_SELECT = "term_name,official_definition,source_name,source_page,related_terms"
 
 
-def _get_json(url: str, headers: dict[str, str]) -> Any:
-    request = urllib.request.Request(url, headers=headers, method="GET")
-
-    try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            body = response.read().decode("utf-8")
-            return json.loads(body) if body else None
-    except urllib.error.HTTPError as error:
-        message = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"GET {url} failed: HTTP {error.code} {message}") from error
-
-
-def _supabase_headers() -> dict[str, str]:
-    settings = get_settings()
-    return {
-        "apikey": settings.supabase_service_role_key,
-        "Authorization": f"Bearer {settings.supabase_service_role_key}",
-        "Content-Type": "application/json",
-    }
+def _to_retrieved_term(row: dict[str, Any], similarity: float | None = None) -> RetrievedTerm:
+    return RetrievedTerm(
+        term_name=row["term_name"],
+        official_definition=row["official_definition"],
+        source_name=row["source_name"],
+        source_page=row.get("source_page"),
+        related_terms=row.get("related_terms") or [],
+        similarity=row.get("similarity", similarity),
+    )
 
 
-def _normalize_query(query: str) -> str:
+def _normalize_direct_term(query: str) -> str:
     normalized = query.strip()
     normalized = re.sub(r"[?？!！.。]+$", "", normalized)
     normalized = re.sub(r"\s+", " ", normalized)
@@ -70,47 +48,45 @@ def _normalize_query(query: str) -> str:
     ]
     for ending in endings:
         if normalized.endswith(ending):
-            normalized = normalized[: -len(ending)].strip()
-            break
+            return normalized[: -len(ending)].strip()
 
     return normalized
-
-
-def _to_retrieved_term(row: dict[str, Any], similarity: float | None = None) -> RetrievedTerm:
-    return RetrievedTerm(
-        term_name=row["term_name"],
-        official_definition=row["official_definition"],
-        source_name=row["source_name"],
-        source_page=row.get("source_page"),
-        related_terms=row.get("related_terms") or [],
-        similarity=row.get("similarity", similarity),
-    )
 
 
 def _vector_literal(values: list[float]) -> str:
     return "[" + ",".join(f"{value:.8f}" for value in values) + "]"
 
 
-async def _search_exact(query: str) -> list[RetrievedTerm]:
+def create_query_embedding(query: str) -> list[float]:
     settings = get_settings()
-    if not settings.supabase_url or not settings.supabase_service_role_key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required")
+    if not settings.openai_api_key:
+        raise RuntimeError("OPENAI_API_KEY is required")
 
-    candidate = _normalize_query(query)
-    if not candidate:
-        return []
-
-    select = "term_name,official_definition,source_name,source_page,related_terms"
-    encoded_term = urllib.parse.quote(candidate, safe="")
-    endpoint = (
-        f"{settings.supabase_url.rstrip('/')}/rest/v1/economic_terms"
-        f"?select={select}&term_name=eq.{encoded_term}&limit=1"
+    client = OpenAI(api_key=settings.openai_api_key)
+    response = client.embeddings.create(
+        model=settings.openai_embedding_model,
+        input=query,
     )
-    rows = _get_json(endpoint, _supabase_headers()) or []
-    if rows:
-        return [_to_retrieved_term(rows[0], similarity=1.0)]
+    return response.data[0].embedding
 
-    return []
+
+async def get_term_by_name(term: str) -> RetrievedTerm | None:
+    candidate = _normalize_direct_term(term)
+    if not candidate:
+        return None
+
+    response = (
+        get_supabase_client()
+        .table("economic_terms")
+        .select(TERM_SELECT)
+        .eq("term_name", candidate)
+        .limit(1)
+        .execute()
+    )
+    if not response.data:
+        return None
+
+    return _to_retrieved_term(response.data[0], similarity=1.0)
 
 
 def _extract_keywords(query: str) -> list[str]:
@@ -172,25 +148,24 @@ def _score_text_candidate(row: dict[str, Any], query: str, keywords: list[str]) 
     return score
 
 
-async def _search_text(query: str) -> list[RetrievedTerm]:
-    settings = get_settings()
+async def _search_text_candidates(query: str) -> list[RetrievedTerm]:
     keywords = _extract_keywords(query)
     if not keywords:
         return []
 
-    select = "term_name,official_definition,source_name,source_page,related_terms"
-    headers = _supabase_headers()
     rows_by_term: dict[str, dict[str, Any]] = {}
+    supabase = get_supabase_client()
 
     for keyword in keywords:
-        encoded = urllib.parse.quote(f"*{keyword}*", safe="*")
-        endpoint = (
-            f"{settings.supabase_url.rstrip('/')}/rest/v1/economic_terms"
-            f"?select={select}"
-            f"&or=(term_name.ilike.{encoded},official_definition.ilike.{encoded})"
-            "&limit=100"
+        pattern = f"%{keyword}%"
+        response = (
+            supabase.table("economic_terms")
+            .select(TERM_SELECT)
+            .or_(f"term_name.ilike.{pattern},official_definition.ilike.{pattern}")
+            .limit(100)
+            .execute()
         )
-        for row in _get_json(endpoint, headers) or []:
+        for row in response.data or []:
             rows_by_term[row["term_name"]] = row
 
     scored_rows = [
@@ -206,49 +181,56 @@ async def _search_text(query: str) -> list[RetrievedTerm]:
     ]
 
 
-async def _create_query_embedding(query: str) -> list[float]:
+async def _search_vector_candidates(query: str) -> list[RetrievedTerm]:
     settings = get_settings()
-    if not settings.openai_api_key:
-        raise RuntimeError("OPENAI_API_KEY is required")
-
-    response = _post_json(
-        "https://api.openai.com/v1/embeddings",
-        {
-            "Authorization": f"Bearer {settings.openai_api_key}",
-            "Content-Type": "application/json",
-        },
-        {"model": settings.openai_embedding_model, "input": query},
-    )
-    return response["data"][0]["embedding"]
-
-
-async def _search_vector(query: str) -> list[RetrievedTerm]:
-    settings = get_settings()
-    embedding = await _create_query_embedding(query)
-    endpoint = f"{settings.supabase_url.rstrip('/')}/rest/v1/rpc/match_economic_terms"
-    rows = _post_json(
-        endpoint,
-        _supabase_headers(),
+    embedding = create_query_embedding(query)
+    response = get_supabase_client().rpc(
+        "match_economic_terms",
         {
             "query_embedding": _vector_literal(embedding),
-            "match_count": settings.retrieval_top_k,
-            "min_similarity": settings.retrieval_min_score,
+            "match_count": max(settings.retrieval_top_k, 10),
+            "min_similarity": 0.0,
         },
-    )
-    return [_to_retrieved_term(row) for row in rows or []]
+    ).execute()
+
+    candidates = [_to_retrieved_term(row) for row in response.data or []]
+    return [
+        candidate
+        for candidate in candidates
+        if (candidate.similarity or 0) >= settings.retrieval_min_score
+    ][: settings.retrieval_top_k]
 
 
-async def retrieve_terms(query: str) -> list[RetrievedTerm]:
+def _merge_candidates(*groups: list[RetrievedTerm]) -> list[RetrievedTerm]:
+    merged: dict[str, RetrievedTerm] = {}
+    for group in groups:
+        for candidate in group:
+            current = merged.get(candidate.term_name)
+            if current is None or (candidate.similarity or 0) > (current.similarity or 0):
+                merged[candidate.term_name] = candidate
+
+    return sorted(
+        merged.values(),
+        key=lambda candidate: candidate.similarity or 0,
+        reverse=True,
+    )[: get_settings().retrieval_top_k]
+
+
+async def retrieve_terms_for_question(query: str) -> list[RetrievedTerm]:
     normalized_query = query.strip()
     if not normalized_query:
         return []
 
-    exact_terms = await _search_exact(normalized_query)
-    if exact_terms:
-        return exact_terms
+    # The product flow starts with question embeddings and vector search. Exact and
+    # text candidates are then merged in so direct-term and simple natural language
+    # questions remain reliable in the PoC dataset.
+    vector_candidates = await _search_vector_candidates(normalized_query)
+    exact_candidate = await get_term_by_name(normalized_query)
+    text_candidates = await _search_text_candidates(normalized_query)
 
-    text_terms = await _search_text(normalized_query)
-    if text_terms:
-        return text_terms
+    exact_candidates = [exact_candidate] if exact_candidate else []
+    return _merge_candidates(exact_candidates, text_candidates, vector_candidates)
 
-    return await _search_vector(normalized_query)
+
+async def retrieve_terms(query: str) -> list[RetrievedTerm]:
+    return await retrieve_terms_for_question(query)

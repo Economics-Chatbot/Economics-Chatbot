@@ -1,25 +1,12 @@
 from __future__ import annotations
 
 import json
-import urllib.error
-import urllib.request
 from typing import Any
+
+from openai import OpenAI
 
 from app.core.config import get_settings
 from app.models.schemas import ChatAnswer, RetrievedTerm
-
-
-def _post_json(url: str, headers: dict[str, str], payload: Any) -> Any:
-    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    request = urllib.request.Request(url, data=data, headers=headers, method="POST")
-
-    try:
-        with urllib.request.urlopen(request, timeout=120) as response:
-            body = response.read().decode("utf-8")
-            return json.loads(body) if body else None
-    except urllib.error.HTTPError as error:
-        message = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"POST {url} failed: HTTP {error.code} {message}") from error
 
 
 def _fallback_answer(term: RetrievedTerm) -> ChatAnswer:
@@ -75,26 +62,20 @@ async def generate_answer(query: str, term: RetrievedTerm) -> ChatAnswer:
     }
 
     try:
-        response = _post_json(
-            "https://api.openai.com/v1/chat/completions",
-            {
-                "Authorization": f"Bearer {settings.openai_api_key}",
-                "Content-Type": "application/json",
-            },
-            {
-                "model": settings.openai_chat_model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {
-                        "role": "user",
-                        "content": json.dumps(user_prompt, ensure_ascii=False),
-                    },
-                ],
-                "response_format": {"type": "json_object"},
-                "temperature": 0.2,
-            },
+        client = OpenAI(api_key=settings.openai_api_key)
+        response = client.chat.completions.create(
+            model=settings.openai_chat_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": json.dumps(user_prompt, ensure_ascii=False),
+                },
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.2,
         )
-        content = response["choices"][0]["message"]["content"]
+        content = response.choices[0].message.content or ""
         parsed = _parse_json_object(content)
     except Exception:
         return _fallback_answer(term)
