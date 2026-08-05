@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Literal, Protocol
+from typing import Any, Iterator, Literal, Protocol
 
 from openai import OpenAI
 
@@ -77,8 +78,17 @@ def get_database_connection() -> DbConnection:
     return connect(settings.resolved_database_url, row_factory=dict_row)
 
 
-def close_connection(connection: DbConnection) -> None:
-    connection.close()
+@contextmanager
+def managed_database_connection(connection: DbConnection | None = None) -> Iterator[DbConnection]:
+    if connection is not None:
+        yield connection
+        return
+
+    owned_connection = get_database_connection()
+    try:
+        yield owned_connection
+    finally:
+        owned_connection.close()
 
 
 def search_index(
@@ -87,12 +97,8 @@ def search_index(
     connection: DbConnection | None = None,
     match_count: int = DEFAULT_MATCH_COUNT,
 ) -> list[SearchHit]:
-    owns_connection = connection is None
-    if connection is None:
-        connection = get_database_connection()
-
-    try:
-        cursor = connection.execute(
+    with managed_database_connection(connection) as active_connection:
+        cursor = active_connection.execute(
             """
             select
                 ranked.term_id,
@@ -119,21 +125,14 @@ def search_index(
                 continue
             hits.append(SearchHit(term_id=int(row["term_id"]), similarity=float(row["similarity"])))
         return hits
-    finally:
-        if owns_connection:
-            close_connection(connection)
 
 
 def fetch_terms(term_ids: list[int], *, connection: DbConnection | None = None) -> list[TermDocument]:
     if not term_ids:
         return []
 
-    owns_connection = connection is None
-    if connection is None:
-        connection = get_database_connection()
-
-    try:
-        cursor = connection.execute(
+    with managed_database_connection(connection) as active_connection:
+        cursor = active_connection.execute(
             """
             select
                 term_id,
@@ -161,9 +160,6 @@ def fetch_terms(term_ids: list[int], *, connection: DbConnection | None = None) 
                 )
             )
         return terms
-    finally:
-        if owns_connection:
-            close_connection(connection)
 
 
 def attach_similarity(terms: list[TermDocument], hits: list[SearchHit]) -> list[TermDocument]:
@@ -209,14 +205,7 @@ def retrieve(
     connection: DbConnection | None = None,
     match_count: int = DEFAULT_MATCH_COUNT,
 ) -> RetrievalResult:
-    owns_connection = connection is None
-    if connection is None:
-        connection = get_database_connection()
-
-    try:
+    with managed_database_connection(connection) as active_connection:
         query_embedding = create_query_embedding(query, embeddings_client)
-        hits = search_index(query_embedding, connection=connection, match_count=match_count)
-        return apply_thresholds(hits, connection=connection)
-    finally:
-        if owns_connection:
-            close_connection(connection)
+        hits = search_index(query_embedding, connection=active_connection, match_count=match_count)
+        return apply_thresholds(hits, connection=active_connection)
