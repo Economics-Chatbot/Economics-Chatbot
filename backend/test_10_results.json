@@ -1,0 +1,382 @@
+[
+  {
+    "id": 1,
+    "query": "GDP가 뭐야?",
+    "type": "직접 용어 약어 질문",
+    "target": "GDP",
+    "top_matches": [
+      {
+        "term_name": "GDP",
+        "similarity": 1.0
+      },
+      {
+        "term_name": "Real GDP",
+        "similarity": 0.7288
+      },
+      {
+        "term_name": "Gross Domestic Product",
+        "similarity": 0.7076
+      }
+    ],
+    "current_threshold": {
+      "ans_thres": 0.82,
+      "sug_thres": 0.65,
+      "status": "answerable",
+      "term": {
+        "term_id": 82,
+        "term_name": "GDP",
+        "similarity": 1.0
+      },
+      "suggestions": []
+    },
+    "proposed_threshold": {
+      "ans_thres": 0.7,
+      "sug_thres": 0.5,
+      "status": "answerable",
+      "term": {
+        "term_id": 82,
+        "term_name": "GDP",
+        "similarity": 1.0
+      },
+      "suggestions": []
+    }
+  },
+  {
+    "id": 2,
+    "query": "기준금리가 무슨 뜻인가요?",
+    "type": "직접 용어 한글 질문",
+    "target": "기준금리",
+    "top_matches": [
+      {
+        "term_name": "Demand-Pull Inflation",
+        "similarity": 0.0678
+      },
+      {
+        "term_name": "Contractionary Policy",
+        "similarity": 0.0637
+      },
+      {
+        "term_name": "Money Market",
+        "similarity": 0.0629
+      }
+    ],
+    "current_threshold": {
+      "ans_thres": 0.82,
+      "sug_thres": 0.65,
+      "status": "not_found",
+      "term": null,
+      "suggestions": []
+    },
+    "proposed_threshold": {
+      "ans_thres": 0.7,
+      "sug_thres": 0.5,
+      "status": "not_found",
+      "term": null,
+      "suggestions": []
+    }
+  },
+  {
+    "id": 3,
+    "query": "ICO",
+    "type": "단일 키워드 검색",
+    "target": "ICO",
+    "top_matches": [
+      {
+        "term_name": "ICO",
+        "similarity": 1.0
+      },
+      {
+        "term_name": "CI",
+        "similarity": 0.6784
+      },
+      {
+        "term_name": "PI",
+        "similarity": 0.652
+      }
+    ],
+    "current_threshold": {
+      "ans_thres": 0.82,
+      "sug_thres": 0.65,
+      "status": "answerable",
+      "term": {
+        "term_id": 9,
+        "term_name": "ICO",
+        "similarity": 1.0
+      },
+      "suggestions": []
+    },
+    "proposed_threshold": {
+      "ans_thres": 0.7,
+      "sug_thres": 0.5,
+      "status": "answerable",
+      "term": {
+        "term_id": 9,
+        "term_name": "ICO",
+        "similarity": 1.0
+      },
+      "suggestions": []
+    }
+  },
+  {
+    "id": 4,
+    "query": "스프레드에 대해 설명해줘",
+    "type": "용어 서술 요청",
+    "target": "스프레드",
+    "top_matches": [
+      {
+        "term_name": "스프레드",
+        "similarity": 1.0
+      },
+      {
+        "term_name": "SPV",
+        "similarity": 0.3846
+      },
+      {
+        "term_name": "기프트카드",
+        "similarity": 0.3493
+      }
+    ],
+    "current_threshold": {
+      "ans_thres": 0.82,
+      "sug_thres": 0.65,
+      "status": "answerable",
+      "term": {
+        "term_id": 7,
+        "term_name": "스프레드",
+        "similarity": 1.0
+      },
+      "suggestions": []
+    },
+    "proposed_threshold": {
+      "ans_thres": 0.7,
+      "sug_thres": 0.5,
+      "status": "answerable",
+      "term": {
+        "term_id": 7,
+        "term_name": "스프레드",
+        "similarity": 1.0
+      },
+      "suggestions": []
+    }
+  },
+  {
+    "id": 5,
+    "query": "물가가 지속적으로 상승하는 현상",
+    "type": "개념 설명 질문 (인플레이션)",
+    "target": "인플레이션 / CPI",
+    "top_matches": [
+      {
+        "term_name": "Demand-Pull Inflation",
+        "similarity": 0.0678
+      },
+      {
+        "term_name": "Contractionary Policy",
+        "similarity": 0.0637
+      },
+      {
+        "term_name": "Money Market",
+        "similarity": 0.0629
+      }
+    ],
+    "current_threshold": {
+      "ans_thres": 0.82,
+      "sug_thres": 0.65,
+      "status": "not_found",
+      "term": null,
+      "suggestions": []
+    },
+    "proposed_threshold": {
+      "ans_thres": 0.7,
+      "sug_thres": 0.5,
+      "status": "not_found",
+      "term": null,
+      "suggestions": []
+    }
+  },
+  {
+    "id": 6,
+    "query": "중앙은행에서 결정하는 정책 금리",
+    "type": "개념 설명 질문 (기준금리)",
+    "target": "기준금리",
+    "top_matches": [
+      {
+        "term_name": "담보부 익일금리",
+        "similarity": 1.0
+      },
+      {
+        "term_name": "농 수 산림조합의 상호금융",
+        "similarity": 0.3695
+      },
+      {
+        "term_name": "익",
+        "similarity": 0.3292
+      }
+    ],
+    "current_threshold": {
+      "ans_thres": 0.82,
+      "sug_thres": 0.65,
+      "status": "answerable",
+      "term": {
+        "term_id": 831,
+        "term_name": "담보부 익일금리",
+        "similarity": 1.0
+      },
+      "suggestions": []
+    },
+    "proposed_threshold": {
+      "ans_thres": 0.7,
+      "sug_thres": 0.5,
+      "status": "answerable",
+      "term": {
+        "term_id": 831,
+        "term_name": "담보부 익일금리",
+        "similarity": 1.0
+      },
+      "suggestions": []
+    }
+  },
+  {
+    "id": 7,
+    "query": "주식 거래 시장 지수",
+    "type": "유사 금융 관련 질문",
+    "target": "주가지수 / CI",
+    "top_matches": [
+      {
+        "term_name": "Demand-Pull Inflation",
+        "similarity": 0.0678
+      },
+      {
+        "term_name": "Contractionary Policy",
+        "similarity": 0.0637
+      },
+      {
+        "term_name": "Money Market",
+        "similarity": 0.0629
+      }
+    ],
+    "current_threshold": {
+      "ans_thres": 0.82,
+      "sug_thres": 0.65,
+      "status": "not_found",
+      "term": null,
+      "suggestions": []
+    },
+    "proposed_threshold": {
+      "ans_thres": 0.7,
+      "sug_thres": 0.5,
+      "status": "not_found",
+      "term": null,
+      "suggestions": []
+    }
+  },
+  {
+    "id": 8,
+    "query": "돈과 금융",
+    "type": "모호하고 광범위한 질문",
+    "target": "금융 / 화폐",
+    "top_matches": [
+      {
+        "term_name": "농 수 산림조합의 상호금융",
+        "similarity": 1.0
+      },
+      {
+        "term_name": "Official Reserve Assets",
+        "similarity": 0.3827
+      },
+      {
+        "term_name": "Financial Infrastructure",
+        "similarity": 0.3736
+      }
+    ],
+    "current_threshold": {
+      "ans_thres": 0.82,
+      "sug_thres": 0.65,
+      "status": "answerable",
+      "term": {
+        "term_id": 469,
+        "term_name": "농 수 산림조합의 상호금융",
+        "similarity": 1.0
+      },
+      "suggestions": []
+    },
+    "proposed_threshold": {
+      "ans_thres": 0.7,
+      "sug_thres": 0.5,
+      "status": "answerable",
+      "term": {
+        "term_id": 469,
+        "term_name": "농 수 산림조합의 상호금융",
+        "similarity": 1.0
+      },
+      "suggestions": []
+    }
+  },
+  {
+    "id": 9,
+    "query": "오늘 내일 날씨 어때?",
+    "type": "경제와 무관한 질문",
+    "target": "없음",
+    "top_matches": [
+      {
+        "term_name": "Demand-Pull Inflation",
+        "similarity": 0.0678
+      },
+      {
+        "term_name": "Contractionary Policy",
+        "similarity": 0.0637
+      },
+      {
+        "term_name": "Money Market",
+        "similarity": 0.0629
+      }
+    ],
+    "current_threshold": {
+      "ans_thres": 0.82,
+      "sug_thres": 0.65,
+      "status": "not_found",
+      "term": null,
+      "suggestions": []
+    },
+    "proposed_threshold": {
+      "ans_thres": 0.7,
+      "sug_thres": 0.5,
+      "status": "not_found",
+      "term": null,
+      "suggestions": []
+    }
+  },
+  {
+    "id": 10,
+    "query": "맛있는 점심 메뉴 추천해줘",
+    "type": "일상적 무관한 질문",
+    "target": "없음",
+    "top_matches": [
+      {
+        "term_name": "Demand-Pull Inflation",
+        "similarity": 0.0678
+      },
+      {
+        "term_name": "Contractionary Policy",
+        "similarity": 0.0637
+      },
+      {
+        "term_name": "Money Market",
+        "similarity": 0.0629
+      }
+    ],
+    "current_threshold": {
+      "ans_thres": 0.82,
+      "sug_thres": 0.65,
+      "status": "not_found",
+      "term": null,
+      "suggestions": []
+    },
+    "proposed_threshold": {
+      "ans_thres": 0.7,
+      "sug_thres": 0.5,
+      "status": "not_found",
+      "term": null,
+      "suggestions": []
+    }
+  }
+]

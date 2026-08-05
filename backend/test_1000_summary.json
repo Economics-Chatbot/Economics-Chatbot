@@ -1,0 +1,314 @@
+{
+  "total_test_cases": 1000,
+  "categories_count": {
+    "exact_term": 457,
+    "varied_term": 393,
+    "unrelated": 150
+  },
+  "current_threshold_results": {
+    "thresholds": {
+      "answerable": 0.82,
+      "suggestion": 0.65
+    },
+    "counts": {
+      "answerable": 850,
+      "suggestions": 0,
+      "not_found": 150,
+      "exact_correct": 803,
+      "unrelated_false_pos": 0
+    },
+    "answerable_ratio": 85.0,
+    "suggestions_ratio": 0.0,
+    "not_found_ratio": 15.0,
+    "unrelated_false_positive_count": 0
+  },
+  "proposed_threshold_results": {
+    "thresholds": {
+      "answerable": 0.7,
+      "suggestion": 0.5
+    },
+    "counts": {
+      "answerable": 850,
+      "suggestions": 0,
+      "not_found": 150,
+      "exact_correct": 803,
+      "unrelated_false_pos": 0
+    },
+    "answerable_ratio": 85.0,
+    "suggestions_ratio": 0.0,
+    "not_found_ratio": 15.0,
+    "unrelated_false_positive_count": 0
+  },
+  "samples": [
+    {
+      "id": 1,
+      "query": "HDRI에 대해 설명해줘",
+      "category": "exact_term",
+      "top_match": "HDRI",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 2,
+      "query": "PDI",
+      "category": "exact_term",
+      "top_match": "PDI",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 3,
+      "query": "Personal Disposable Income에 대해 설명해줘",
+      "category": "exact_term",
+      "top_match": "Personal Disposable Income",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 4,
+      "query": "스프레드의 정의가 어떻게 되나요?",
+      "category": "exact_term",
+      "top_match": "스프레드",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 5,
+      "query": "spread 의미",
+      "category": "exact_term",
+      "top_match": "spread",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 6,
+      "query": "Virtual Asset 관련 경제 정보",
+      "category": "exact_term",
+      "top_match": "Virtual Asset",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 7,
+      "query": "ICO 관련 경제 정보",
+      "category": "exact_term",
+      "top_match": "ICO",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 8,
+      "query": "Initial Coin Offering의 정의가 어떻게 되나요?",
+      "category": "exact_term",
+      "top_match": "Initial Coin Offering",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 9,
+      "query": "Indirect Financing가 뭐야?",
+      "category": "exact_term",
+      "top_match": "Indirect Financing",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 10,
+      "query": "Direct Financing에 대해 설명해줘",
+      "category": "exact_term",
+      "top_match": "Direct Financing",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 11,
+      "query": "Indirect Tax에 대해 설명해줘",
+      "category": "exact_term",
+      "top_match": "Indirect Tax",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 12,
+      "query": "Direct Tax에 대해 자세히 알고 싶어요",
+      "category": "exact_term",
+      "top_match": "Direct Tax",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 13,
+      "query": "Supervisory College에 대해 설명해줘",
+      "category": "exact_term",
+      "top_match": "Supervisory College",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 14,
+      "query": "Capital A 관련 경제 정보",
+      "category": "exact_term",
+      "top_match": "Capital A",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 15,
+      "query": "TR가 뭐야?",
+      "category": "exact_term",
+      "top_match": "TR",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 16,
+      "query": "Trade Repository 관련 경제 정보",
+      "category": "exact_term",
+      "top_match": "Trade Repository",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 17,
+      "query": "Loss-Sharing",
+      "category": "exact_term",
+      "top_match": "Loss-Sharing",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 18,
+      "query": "Settlement Finality의 정의가 어떻게 되나요?",
+      "category": "exact_term",
+      "top_match": "Settlement Finality",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 19,
+      "query": "Specialized banking 의미",
+      "category": "exact_term",
+      "top_match": "Specialized banking",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 20,
+      "query": "Business Conditions에 대해 자세히 알고 싶어요",
+      "category": "exact_term",
+      "top_match": "Business Conditions",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 100,
+      "query": "Financial Infrastructure 관련 경제 정보",
+      "category": "exact_term",
+      "top_match": "Financial Infrastructure",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 200,
+      "query": "Cost-Push Inflation 의미",
+      "category": "exact_term",
+      "top_match": "Cost-Push Inflation",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 300,
+      "query": "negative externality에 대해 자세히 알고 싶어요",
+      "category": "exact_term",
+      "top_match": "negative externality",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 400,
+      "query": "Exit Strategy에 대해 설명해줘",
+      "category": "exact_term",
+      "top_match": "Exit Strategy",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 500,
+      "query": "요즘 말하는 Shadow Banking 제도",
+      "category": "varied_term",
+      "top_match": "Shadow Banking",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 600,
+      "query": "한국은행 AT1 정책",
+      "category": "varied_term",
+      "top_match": "AT1",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 700,
+      "query": "한국은행 Straight Bond 지수",
+      "category": "varied_term",
+      "top_match": "Straight Bond",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 800,
+      "query": "금융용어 Credit Conversion Factor 비율",
+      "category": "varied_term",
+      "top_match": "Credit Conversion Factor",
+      "top_similarity": 1.0,
+      "cur_status": "answerable",
+      "prop_status": "answerable"
+    },
+    {
+      "id": 900,
+      "query": "강아지 사료 추천 #50",
+      "category": "unrelated",
+      "top_match": "Demand-Pull Inflation",
+      "top_similarity": 0.0678,
+      "cur_status": "not_found",
+      "prop_status": "not_found"
+    },
+    {
+      "id": 1000,
+      "query": "파이썬 문법 기초 #150",
+      "category": "unrelated",
+      "top_match": "Demand-Pull Inflation",
+      "top_similarity": 0.0678,
+      "cur_status": "not_found",
+      "prop_status": "not_found"
+    }
+  ]
+}
