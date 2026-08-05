@@ -123,9 +123,9 @@ OpenAI 키와 Supabase 서비스 역할 키는 백엔드에서만 사용한다.
 
 | Method | Path | 용도 |
 |---|---|---|
-| `GET` | `/health` | 백엔드 상태 확인 |
-| `POST` | `/questions` | 자연어 질문 답변 |
-| `GET` | `/terms/{term}` | 특정 경제용어 조회 및 답변 |
+| `GET` | `/api/health` | 백엔드 상태 확인 |
+| `POST` | `/api/answers` | 자연어 질문 답변 |
+| `GET` | `/api/terms/{term}` | 특정 경제용어 조회 및 답변 |
 
 질문과 답변의 기본 데이터 구조는 `backend/app/models/schemas.py`에서 관리한다.
 
