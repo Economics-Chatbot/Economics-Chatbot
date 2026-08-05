@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/vector-retrieve", response_model=VectorRetrieveResult)
-async def retrieve_term(request: VectorRetrieveRequest) -> VectorRetrieveResult:
+def retrieve_term(request: VectorRetrieveRequest) -> VectorRetrieveResult:
     try:
         return vector_retrieve(request.query)
     except EmbeddingError as error:

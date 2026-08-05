@@ -122,6 +122,7 @@ def _search_terms(query_embedding: list[float], supabase: Any | None = None) -> 
             {
                 "query_embedding": query_embedding,
                 "match_count": MATCH_COUNT,
+                "min_similarity": SUGGESTION_THRESHOLD,
             },
         ).execute()
     except Exception as error:
