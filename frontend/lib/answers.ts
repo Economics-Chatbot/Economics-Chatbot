@@ -1,5 +1,5 @@
 import type {
-  Answer,
+  AnswerCard,
   AnswerDoneData,
   AnswerEventName,
   AnswerStreamEvent,
@@ -10,15 +10,6 @@ import type {
   FailureData,
   SuggestionsData,
 } from "../types/answers";
-
-export type AnswerCard = {
-  index: number;
-  term: string;
-  text: string;
-  answer?: Answer;
-  status: "streaming" | "completed" | "failure" | "error";
-  message?: string;
-};
 
 export type StreamHandlers = {
   onAnswerStart: (data: AnswerStartData) => void;

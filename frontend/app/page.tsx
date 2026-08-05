@@ -2,8 +2,9 @@
 
 import { FormEvent, useRef, useState } from "react";
 
-import { streamAnswers, type AnswerCard } from "../lib/answers";
+import { streamAnswers } from "../lib/answers";
 import type {
+  AnswerCard,
   AnswerDoneData,
   AnswerStartData,
   DeltaData,
@@ -11,6 +12,7 @@ import type {
   ErrorData,
   FailureData,
   SuggestionsData,
+  StreamUiStatus,
 } from "../types/answers";
 
 export default function Home() {
@@ -18,6 +20,7 @@ export default function Home() {
   const [cards, setCards] = useState<AnswerCard[]>([]);
   const [suggestions, setSuggestions] = useState<SuggestionsData[]>([]);
   const [loading, setLoading] = useState(false);
+  const [streamStatus, setStreamStatus] = useState<StreamUiStatus>("idle");
   const [message, setMessage] = useState("");
   const controller = useRef<AbortController | null>(null);
 
@@ -32,6 +35,7 @@ export default function Home() {
     setSuggestions([]);
     setMessage("");
     setLoading(true);
+    setStreamStatus("loading");
     try {
       await streamAnswers(query.trim(), {
         onAnswerStart: ({ index, term }: AnswerStartData) =>
@@ -51,6 +55,7 @@ export default function Home() {
           else updateCard(index, { status: "error", message: errorMessage });
         },
         onDone: ({ status }: DoneData) => {
+          setStreamStatus(status);
           if (status !== "completed") setMessage(status === "partial" ? "일부 용어만 답변했습니다." : "답변을 완료하지 못했습니다.");
         },
       }, controller.current.signal);
@@ -58,6 +63,7 @@ export default function Home() {
       if (!(error instanceof DOMException && error.name === "AbortError")) setMessage("답변 요청 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
+      if (controller.current?.signal.aborted) setStreamStatus("cancelled");
       controller.current = null;
     }
   };

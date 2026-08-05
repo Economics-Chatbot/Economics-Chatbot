@@ -5,6 +5,9 @@ export type DoneStatus =
   | "failed"
   | "error";
 
+export type AnswerCardStatus = "streaming" | "completed" | "failure" | "error";
+export type StreamUiStatus = "idle" | "loading" | DoneStatus | "cancelled";
+
 export type AnswerEventName =
   | "answer_start"
   | "delta"
@@ -22,6 +25,20 @@ export type Answer = {
   example: string;
   related_keywords: string[];
   sources: Source[];
+};
+export type AnswerCard = {
+  index: number;
+  term: string;
+  text: string;
+  answer?: Answer;
+  status: AnswerCardStatus;
+  message?: string;
+};
+export type AnswerStreamState = {
+  status: StreamUiStatus;
+  cardsByIndex: Record<number, AnswerCard>;
+  suggestions: SuggestionsData[];
+  message: string;
 };
 export type AnswerStartData = { index: number; term: string };
 export type DeltaData = { index: number; text: string };
