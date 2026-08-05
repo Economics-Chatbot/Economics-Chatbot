@@ -3,7 +3,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 
-// design.md 타입 정의
 export type ScreenState =
   | "home-idle"
   | "home-typing"
@@ -15,7 +14,11 @@ export type ScreenState =
   | "failure"
   | "error";
 
-export type CharacterState = "default" | "curious" | "eyes-closed" | "thinking";
+// 표정 상태:
+// - default/closed (이미지 1: 눈 감고 미소)
+// - thinking (이미지 2: 위 올려다보는 미소 - 로딩/검색 전용)
+// - error (이미지 3: 동공지진/당황 - 오류/실패 전용)
+export type CharacterState = "default" | "thinking" | "error";
 
 export interface RetrievedTerm {
   term_id: number;
@@ -37,13 +40,13 @@ const MOTION = {
   shrinkMs: 400,
   thinkingStartMs: 520,
   contentReleaseMs: 680,
-  completeFadeMs: 180,
 } as const;
 
+// 이미지 4 스펙 기반 추천 질문 목록
 const HOME_SUGGESTIONS = [
-  "기준금리가 뭐야?",
-  "환율이 오르면 왜 물가도 올라?",
-  "인플레이션이 뭐야?",
+  { icon: "📈", text: "인플레이션이 뭐야?" },
+  { icon: "％", text: "금리가 오르면 어떻게 돼?" },
+  { icon: "📊", text: "ETF를 쉽게 설명해줘" },
 ];
 
 export function AppShell() {
@@ -52,7 +55,6 @@ export function AppShell() {
   const [query, setQuery] = useState("");
   const [userQueryBubble, setUserQueryBubble] = useState("");
   
-  // 스트리밍 / 결과 데이터 상태
   const [termData, setTermData] = useState<RetrievedTerm | null>(null);
   const [suggestions, setSuggestions] = useState<TermSuggestion[]>([]);
   const [failureMsg, setFailureMsg] = useState<string>("");
@@ -64,7 +66,6 @@ export function AppShell() {
 
   const characterLayout = screen === "home-idle" || screen === "home-typing" ? "home" : "result";
 
-  // 자동 스크롤
   useEffect(() => {
     if (viewportRef.current && (screen === "answer-streaming" || screen === "answer-done")) {
       const el = viewportRef.current;
@@ -75,14 +76,11 @@ export function AppShell() {
     }
   }, [answerContent, screen]);
 
-  // 추천 질문 버튼 클릭 (자동 전송 대신 포커스 및 입력창 설정)
-  const handleSuggestionClick = (suggestion: string) => {
-    setQuery(suggestion);
+  const handleSuggestionClick = (suggestionText: string) => {
+    setQuery(suggestionText);
     setScreen("home-typing");
-    setCharacter("curious");
   };
 
-  // 백엔드 API 질문 제출 핸들러 (design.md 19 타임라인 적용)
   const submitQuestion = async (rawQuery: string) => {
     const trimmedQuery = rawQuery.trim();
     if (!trimmedQuery) return;
@@ -93,7 +91,6 @@ export function AppShell() {
     }
     abortControllerRef.current = new AbortController();
 
-    // 초기화 및 타임라인 시작
     setUserQueryBubble(trimmedQuery);
     setQuery("");
     setTermData(null);
@@ -102,20 +99,16 @@ export function AppShell() {
     setErrorMsg("");
     setAnswerContent("");
 
-    // 0ms: query-transition & eyes-closed
+    // [규칙 1]: 정보를 불러올 때는 이미지 1(default/closed) & 이미지 2(thinking) 표정만 사용한다.
     setScreen("query-transition");
-    setCharacter("eyes-closed");
+    setCharacter("default"); // 이미지 1 (눈 감은 표정)
 
-    // 120ms: shrink delay handled by CSS data-character-layout
-
-    // 520ms: searching & thinking
     const timer1 = setTimeout(() => {
       setScreen("searching");
-      setCharacter("thinking");
+      setCharacter("thinking"); // 이미지 2 (위 올려다보는 표정)
     }, MOTION.thinkingStartMs);
 
     try {
-      // BE2 벡터 검색 API 파이프라인 호출 (/be2/vector-retrieve)
       const res = await fetch("http://127.0.0.1:8000/be2/vector-retrieve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -129,21 +122,23 @@ export function AppShell() {
 
       const data = await res.json();
       
-      // 680ms 지점 이후 화면 결과 업데이트
       const timer2 = setTimeout(() => {
         if (data.status === "answerable" && data.term) {
+          // 정보 로딩 성공: 이미지 1 미소 표정으로 결과 표시
           setTermData(data.term);
           setAnswerContent(data.term.official_definition);
           setScreen("answer-done");
-          setCharacter("default");
+          setCharacter("default"); // 이미지 1
         } else if (data.status === "suggestions" && data.suggestions) {
+          // [규칙 2]: 오류/실패 시에는 이미지 3 (error/당황 표정) 사용
           setSuggestions(data.suggestions);
           setScreen("suggestions");
-          setCharacter("curious");
+          setCharacter("error"); // 이미지 3
         } else {
+          // [규칙 2]: 검색 실패 시 이미지 3 (error/당황 표정) 사용
           setFailureMsg("관련 용어를 찾지 못했어요.");
           setScreen("failure");
-          setCharacter("curious");
+          setCharacter("error"); // 이미지 3
         }
       }, MOTION.contentReleaseMs);
 
@@ -154,9 +149,10 @@ export function AppShell() {
     } catch (err: unknown) {
       if ((err as Error).name === "AbortError") return;
       setTimeout(() => {
+        // [규칙 2]: 오류 발생 시 이미지 3 (error/당황 표정) 사용
         setErrorMsg("답변을 불러오지 못했어요.");
         setScreen("error");
-        setCharacter("curious");
+        setCharacter("error"); // 이미지 3
       }, MOTION.contentReleaseMs);
     }
   };
@@ -174,52 +170,38 @@ export function AppShell() {
 
   return (
     <div className="app frame-app-mobile" data-screen={screen} data-character-layout={characterLayout}>
-      {/* 7.1 & 8.1 CHUNK_HEADER */}
+      {/* 헤더 (이미지 4 스펙) */}
       <header className="chunk-header">
         {screen !== "home-idle" && screen !== "home-typing" && (
           <button className="ui-header-back-button" onClick={handleBack} aria-label="뒤로가기">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2647D8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2647D8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6"></polyline>
             </svg>
           </button>
         )}
         <div className="ui-header-brand">EconomyMate</div>
-        {screen !== "home-idle" && screen !== "home-typing" && (
-          <button className="ui-header-info-button" aria-label="정보">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#405DE6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="16" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12.01" y2="8"></line>
-            </svg>
-          </button>
-        )}
+        <button className="ui-header-info-button" aria-label="정보">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2647D8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+        </button>
       </header>
 
-      {/* 6. CHUNK_CHARACTER_STAGE (루트 단 하나만 존재) */}
+      {/* 캐릭터 스테이지 & 이미지 4 신규 3D 장식 요소 (?, 구체, 별) */}
       <div className="chunk-character-stage">
         <div className="ui-character-wrapper">
+          {/* 이미지 1: 눈 감고 웃는 표정 (로딩/성공 전용) */}
           <Image
             src="/assets/character-default.png"
-            alt="옐로 메이트"
+            alt="눈 감은 옐로 메이트"
             width={184}
             height={184}
             className={`ui-character-image ${character === "default" ? "active" : ""}`}
             priority
           />
-          <Image
-            src="/assets/character-curious.png"
-            alt="궁금한 옐로 메이트"
-            width={184}
-            height={184}
-            className={`ui-character-image ${character === "curious" ? "active" : ""}`}
-          />
-          <Image
-            src="/assets/character-complete.png"
-            alt="눈 감은 옐로 메이트"
-            width={184}
-            height={184}
-            className={`ui-character-image ${character === "eyes-closed" ? "active" : ""}`}
-          />
+          {/* 이미지 2: 위 쳐다보는 미소 표정 (검색/정보 로딩 전용) */}
           <Image
             src="/assets/character-thinking.png"
             alt="생각하는 옐로 메이트"
@@ -227,35 +209,53 @@ export function AppShell() {
             height={184}
             className={`ui-character-image ${character === "thinking" ? "active" : ""}`}
           />
+          {/* 이미지 3: 동공 지진 / 당황 표정 (오류/실패 전용) */}
+          <Image
+            src="/assets/character-curious.png"
+            alt="당황한 옐로 메이트"
+            width={184}
+            height={184}
+            className={`ui-character-image ${character === "error" ? "active" : ""}`}
+          />
         </div>
         <div className="ui-character-shadow"></div>
+
+        {/* [규칙 4]: 3D/파스텔 신규 장식 자산 (?, 구체, 별) */}
+        <div className="stage-decorations">
+          <div className="deco-question-mark">?</div>
+          <div className="deco-orb deco-orb-purple"></div>
+          <div className="deco-orb deco-orb-cyan"></div>
+          <div className="deco-orb deco-orb-orange"></div>
+          <div className="deco-star">✦</div>
+        </div>
       </div>
 
-      {/* 7. 시작 화면 레이아웃 (home-only) */}
+      {/* [규칙 3]: 첫 구현 페이지 및 설명 페이지 (이미지 4 스펙) */}
       <div className="home-only">
         <div className="chunk-home-intro">
           <h1 className="type-home-title">
-            {"어려운 경제용어,\n이코노미메이트와 함께라면 어렵지 않아요!"}
+            {"궁금한 경제용어,\n편하게 물어보세요"}
           </h1>
         </div>
 
-        <div className="chunk-home-guide">쉽고 친근하게 설명드릴게요.</div>
+        <div className="chunk-home-guide">어려운 경제를 쉽고 친근하게 설명해드릴게요.</div>
 
         <div className="chunk-home-suggestions">
-          <div className="ui-section-title">자주 묻는 질문</div>
+          <div className="ui-section-title-left">이런 질문은 어때요?</div>
           {HOME_SUGGESTIONS.map((suggestion, idx) => (
             <button
               key={idx}
-              className="ui-suggestion-button"
-              onClick={() => handleSuggestionClick(suggestion)}
+              className="ui-suggestion-pill-button"
+              onClick={() => handleSuggestionClick(suggestion.text)}
             >
-              {suggestion}
+              <span className="icon-chip-circle">{suggestion.icon}</span>
+              <span>{suggestion.text}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* 8. 결과 화면 레이아웃 (result-only) */}
+      {/* 결과 및 상태 화면 */}
       <div className="result-only">
         {userQueryBubble && (
           <div className="chunk-query-bubble">{userQueryBubble}</div>
@@ -271,13 +271,11 @@ export function AppShell() {
 
           {termData && (
             <>
-              {/* 8.5 CHUNK_TERM_HEADER */}
               <div className="chunk-term-header">
                 <div className="ui-term-eyebrow">한국은행 경제금융용어</div>
                 <div className="ui-term-name">{termData.term_name}</div>
               </div>
 
-              {/* 8.6 CHUNK_ANSWER_CONTENT */}
               <div className="chunk-answer-content">
                 <div className="answer-section">
                   <div className="answer-section-title">📌 한 줄 정의</div>
@@ -297,16 +295,14 @@ export function AppShell() {
                 )}
               </div>
 
-              {/* 8.8 CHUNK_SOURCE */}
               <div className="chunk-source">
                 <span className="ui-source-label">출처</span>
                 <span className="ui-source-value">한국은행 경제금융용어 800선</span>
               </div>
 
-              {/* 8.9 CHUNK_RELATED_TERMS */}
               {termData.related_terms && termData.related_terms.length > 0 && (
                 <div className="chunk-related-terms">
-                  <div className="ui-section-title">함께 보면 좋은 용어</div>
+                  <div className="ui-section-title-left">함께 보면 좋은 용어</div>
                   <div className="related-term-buttons">
                     {termData.related_terms.map((term, idx) => (
                       <button
@@ -323,7 +319,7 @@ export function AppShell() {
             </>
           )}
 
-          {/* 11.2 후보 안내 화면 */}
+          {/* 이미지 3 표정 적용된 후보/실패/오류 화면 */}
           {screen === "suggestions" && (
             <div className="chunk-status-feedback">
               <div className="feedback-title">혹시 이 용어를 찾으셨나요?</div>
@@ -342,24 +338,19 @@ export function AppShell() {
             </div>
           )}
 
-          {/* 11.3 검색 실패 화면 */}
           {screen === "failure" && (
             <div className="chunk-status-feedback">
               <div className="feedback-title">관련 용어를 찾지 못했어요.</div>
               <div className="feedback-desc">용어 이름이나 약어를 조금 더 정확하게 입력해 주세요.</div>
               <button
                 className="feedback-action-button"
-                onClick={() => {
-                  setScreen("home-typing");
-                  setCharacter("curious");
-                }}
+                onClick={() => setScreen("home-typing")}
               >
                 다시 질문하기
               </button>
             </div>
           )}
 
-          {/* 11.4 기술 오류 화면 */}
           {screen === "error" && (
             <div className="chunk-status-feedback">
               <div className="feedback-title">답변을 불러오지 못했어요.</div>
@@ -375,7 +366,7 @@ export function AppShell() {
         </div>
       </div>
 
-      {/* 7.6 CHUNK_INPUT_DOCK */}
+      {/* 하단 DOCK 입력창 (이미지 4 스펙) */}
       <form
         className="chunk-input-dock"
         onSubmit={(e) => {
@@ -385,12 +376,11 @@ export function AppShell() {
       >
         <textarea
           className="ui-textarea"
-          placeholder="경제용어를 물어보세요"
+          placeholder="경제용어를 입력해 주세요"
           value={query}
           onFocus={() => {
             if (screen === "home-idle") {
               setScreen("home-typing");
-              setCharacter("curious");
             }
           }}
           onChange={(e) => setQuery(e.target.value)}
