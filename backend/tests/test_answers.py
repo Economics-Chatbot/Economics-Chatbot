@@ -1,4 +1,5 @@
 import json
+import asyncio
 
 from fastapi.testclient import TestClient
 
@@ -52,9 +53,32 @@ def test_candidate_suggestions_do_not_generate_an_answer() -> None:
     assert parsed[-1][1]["status"] == "suggestions"
 
 
-def test_generation_error_has_error_event(monkeypatch) -> None:
-    monkeypatch.setattr(answer_service, "_answer_text", lambda answer: (_ for _ in ()).throw(RuntimeError()))
-    parsed = events(client.post("/api/answers", json={"query": "인플레이션"}).text)
+def test_generation_error_has_error_event() -> None:
+    async def failing_provider(answer):
+        raise RuntimeError()
+        yield "never"
+
+    async def collect() -> str:
+        return "".join([event async for event in answer_service.stream_events("인플레이션", failing_provider)])
+
+    parsed = events(asyncio.run(collect()))
     assert [name for name, _ in parsed] == ["answer_start", "error", "done"]
     assert parsed[1][1]["index"] == 0
     assert parsed[-1][1]["status"] == "error"
+
+
+def test_cancelled_provider_is_not_converted_to_error() -> None:
+    async def cancelled_provider(answer):
+        raise asyncio.CancelledError()
+        yield "never"
+
+    async def collect() -> None:
+        stream = answer_service.stream_events("인플레이션", cancelled_provider)
+        await stream.__anext__()
+        await stream.__anext__()
+
+    try:
+        asyncio.run(collect())
+    except asyncio.CancelledError:
+        return
+    raise AssertionError("provider cancellation must propagate")

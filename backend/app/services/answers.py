@@ -1,8 +1,8 @@
 import asyncio
 import json
 import re
-from collections.abc import AsyncIterator, Iterator
-from typing import Any
+from collections.abc import AsyncIterator, Callable
+from typing import Any, TypeAlias
 
 from app.models.schemas import (
     Answer,
@@ -63,7 +63,25 @@ def _answer_text(answer: Answer) -> str:
     )
 
 
-def build_events(query: str) -> Iterator[str]:
+def lookup_answer(term: str) -> Answer | None:
+    """Local seam for search; production search can be injected later."""
+    return _ANSWERS.get(term)
+
+
+async def stream_answer_chunks(answer: Answer) -> AsyncIterator[str]:
+    """Fake chunk provider used until the real model provider is wired in."""
+    for chunk in re.findall(r".{1,24}(?:\s+|$)", _answer_text(answer)):
+        yield chunk
+        await asyncio.sleep(0)
+
+
+AnswerChunkProvider: TypeAlias = Callable[[Answer], AsyncIterator[str]]
+
+
+async def stream_events(
+    query: str,
+    chunk_provider: AnswerChunkProvider = stream_answer_chunks,
+) -> AsyncIterator[str]:
     terms = extract_terms(query)
     completed: list[int] = []
     failed: list[int] = []
@@ -71,7 +89,18 @@ def build_events(query: str) -> Iterator[str]:
     suggested = False
 
     for index, term in enumerate(terms):
-        answer = _ANSWERS.get(term)
+        try:
+            answer = lookup_answer(term)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            errors.append(index)
+            yield sse(
+                "error",
+                ErrorData(index=index, code="search_failed", message="검색 처리 중 오류가 발생했습니다."),
+            )
+            continue
+
         if answer is None:
             candidates = _SUGGESTIONS.get(term)
             if candidates:
@@ -96,9 +125,11 @@ def build_events(query: str) -> Iterator[str]:
         try:
             completed.append(index)
             yield sse("answer_start", AnswerStartData(index=index, term=term))
-            for chunk in re.findall(r".{1,24}(?:\s+|$)", _answer_text(answer)):
+            async for chunk in chunk_provider(answer):
                 yield sse("delta", DeltaData(index=index, text=chunk))
             yield sse("answer_done", AnswerDoneData(index=index, answer=answer))
+        except asyncio.CancelledError:
+            raise
         except Exception:
             if index in completed:
                 completed.remove(index)
@@ -120,9 +151,3 @@ def build_events(query: str) -> Iterator[str]:
         yield sse("done", DoneData(status="partial", completed_indices=completed, failed_indices=failed))
     else:
         yield sse("done", DoneData(status="completed", completed_indices=completed))
-
-
-async def stream_events(query: str) -> AsyncIterator[str]:
-    for event in build_events(query):
-        yield event
-        await asyncio.sleep(0)
