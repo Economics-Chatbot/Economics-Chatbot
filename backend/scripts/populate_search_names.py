@@ -92,6 +92,8 @@ def _is_search_name(candidate: str, term_name: str) -> bool:
         return False
     if re.fullmatch(r"[A-Z][A-Z0-9-]*", candidate):
         return True
+    if re.fullmatch(r"[A-Za-z][A-Za-z0-9-]*", candidate):
+        return True
     if re.fullmatch(r"[A-Za-z]+(?:[ -][A-Za-z]+)+", candidate):
         return True
     if re.fullmatch(r"[a-z]+", candidate):
