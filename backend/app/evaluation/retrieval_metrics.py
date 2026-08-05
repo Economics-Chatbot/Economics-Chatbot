@@ -3,20 +3,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import log2
 
+from app.core.retrieval_config import CANDIDATE_THRESHOLD, HIGH_CONFIDENCE_THRESHOLD
+
 
 @dataclass(frozen=True)
 class RetrievalEvaluationConfig:
-    high_confidence_threshold: float = 0.72
-    candidate_threshold: float = 0.55
+    high_confidence_threshold: float = HIGH_CONFIDENCE_THRESHOLD
+    candidate_threshold: float = CANDIDATE_THRESHOLD
 
 
 def precision_at_k(retrieved_ids: list[int], relevant_ids: set[int], k: int) -> float:
     if k <= 0:
         return 0.0
     top_k = retrieved_ids[:k]
-    if not top_k:
-        return 0.0
-    return sum(1 for term_id in top_k if term_id in relevant_ids) / len(top_k)
+    return sum(1 for term_id in top_k if term_id in relevant_ids) / k
 
 
 def recall_at_k(retrieved_ids: list[int], relevant_ids: set[int], k: int) -> float:

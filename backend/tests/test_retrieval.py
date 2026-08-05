@@ -3,9 +3,9 @@ from types import SimpleNamespace
 import pytest
 
 from app.core.config import get_settings
+from app.core.retrieval_config import CANDIDATE_THRESHOLD, HIGH_CONFIDENCE_THRESHOLD
+from app.services import retrieval
 from app.services.retrieval import (
-    CANDIDATE_THRESHOLD,
-    HIGH_CONFIDENCE_THRESHOLD,
     RetrievalResult,
     create_query_embedding,
     format_vector,
@@ -41,6 +41,7 @@ class FakeConnection:
         self.search_rows = search_rows
         self.term_rows = term_rows or []
         self.calls: list[tuple[str, dict[str, object]]] = []
+        self.closed = False
 
     def execute(self, query: str, params: dict[str, object]) -> FakeCursor:
         self.calls.append((query, params))
@@ -50,6 +51,9 @@ class FakeConnection:
             term_ids = params["term_ids"]
             return FakeCursor([row for row in self.term_rows if row["term_id"] in term_ids])
         raise AssertionError(f"unexpected query: {query}")
+
+    def close(self) -> None:
+        self.closed = True
 
 
 @pytest.fixture(autouse=True)
@@ -97,6 +101,27 @@ def test_search_index_runs_pgvector_cosine_similarity_in_database() -> None:
     assert "si.embedding <=> %(query_embedding)s::vector" in query
     assert "group by si.term_id" in query
     assert params == {"query_embedding": "[1.0,0.0]", "match_count": 3}
+    assert not connection.closed
+
+
+def test_retrieve_closes_owned_database_connection(monkeypatch: pytest.MonkeyPatch) -> None:
+    connection = FakeConnection(
+        search_rows=[{"term_id": 10, "similarity": HIGH_CONFIDENCE_THRESHOLD}],
+        term_rows=[
+            {
+                "term_id": 10,
+                "term_name": "base rate",
+                "official_definition": "A policy interest rate.",
+                "related_terms": [],
+            }
+        ],
+    )
+    monkeypatch.setattr(retrieval, "get_database_connection", lambda: connection)
+
+    result = retrieve("base rate", embeddings_client=FakeEmbeddingsClient())
+
+    assert result.status == "matched"
+    assert connection.closed
 
 
 def test_retrieve_returns_terms_for_high_similarity() -> None:
@@ -118,6 +143,7 @@ def test_retrieve_returns_terms_for_high_similarity() -> None:
     assert result.terms[0].term_name == "base rate"
     assert result.terms[0].similarity == HIGH_CONFIDENCE_THRESHOLD
     assert result.candidates == []
+    assert not connection.closed
 
 
 def test_retrieve_returns_candidates_for_medium_similarity() -> None:

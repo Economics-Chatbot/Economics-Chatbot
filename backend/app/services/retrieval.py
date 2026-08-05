@@ -6,10 +6,9 @@ from typing import Any, Literal, Protocol
 from openai import OpenAI
 
 from app.core.config import get_settings
+from app.core.retrieval_config import CANDIDATE_THRESHOLD, HIGH_CONFIDENCE_THRESHOLD
 
 
-HIGH_CONFIDENCE_THRESHOLD = 0.72
-CANDIDATE_THRESHOLD = 0.55
 DEFAULT_MATCH_COUNT = 3
 RetrievalStatus = Literal["matched", "candidates", "not_found"]
 
@@ -20,6 +19,8 @@ class EmbeddingsClient(Protocol):
 
 class DbConnection(Protocol):
     def execute(self, query: str, params: dict[str, Any]) -> Any: ...
+
+    def close(self) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -76,78 +77,93 @@ def get_database_connection() -> DbConnection:
     return connect(settings.resolved_database_url, row_factory=dict_row)
 
 
+def close_connection(connection: DbConnection) -> None:
+    connection.close()
+
+
 def search_index(
     query_embedding: list[float],
     *,
     connection: DbConnection | None = None,
     match_count: int = DEFAULT_MATCH_COUNT,
 ) -> list[SearchHit]:
+    owns_connection = connection is None
     if connection is None:
         connection = get_database_connection()
 
-    cursor = connection.execute(
-        """
-        select
-            ranked.term_id,
-            ranked.similarity
-        from (
+    try:
+        cursor = connection.execute(
+            """
             select
-                si.term_id,
-                max(1 - (si.embedding <=> %(query_embedding)s::vector))::double precision as similarity
-            from search_index si
-            group by si.term_id
-        ) ranked
-        order by ranked.similarity desc
-        limit %(match_count)s
-        """,
-        {
-            "query_embedding": format_vector(query_embedding),
-            "match_count": match_count,
-        },
-    )
+                ranked.term_id,
+                ranked.similarity
+            from (
+                select
+                    si.term_id,
+                    max(1 - (si.embedding <=> %(query_embedding)s::vector))::double precision as similarity
+                from search_index si
+                group by si.term_id
+            ) ranked
+            order by ranked.similarity desc
+            limit %(match_count)s
+            """,
+            {
+                "query_embedding": format_vector(query_embedding),
+                "match_count": match_count,
+            },
+        )
 
-    hits: list[SearchHit] = []
-    for row in cursor.fetchall():
-        if row.get("term_id") is None or row.get("similarity") is None:
-            continue
-        hits.append(SearchHit(term_id=int(row["term_id"]), similarity=float(row["similarity"])))
-    return hits
+        hits: list[SearchHit] = []
+        for row in cursor.fetchall():
+            if row.get("term_id") is None or row.get("similarity") is None:
+                continue
+            hits.append(SearchHit(term_id=int(row["term_id"]), similarity=float(row["similarity"])))
+        return hits
+    finally:
+        if owns_connection:
+            close_connection(connection)
 
 
 def fetch_terms(term_ids: list[int], *, connection: DbConnection | None = None) -> list[TermDocument]:
     if not term_ids:
         return []
+
+    owns_connection = connection is None
     if connection is None:
         connection = get_database_connection()
 
-    cursor = connection.execute(
-        """
-        select
-            term_id,
-            term_name,
-            official_definition,
-            related_terms
-        from terms
-        where term_id = any(%(term_ids)s)
-        """,
-        {"term_ids": term_ids},
-    )
-    rows_by_id = {int(row["term_id"]): row for row in cursor.fetchall()}
-
-    terms: list[TermDocument] = []
-    for term_id in term_ids:
-        row = rows_by_id.get(term_id)
-        if not row:
-            continue
-        terms.append(
-            TermDocument(
-                term_id=int(row["term_id"]),
-                term_name=str(row["term_name"]),
-                official_definition=row.get("official_definition"),
-                related_terms=list(row.get("related_terms") or []),
-            )
+    try:
+        cursor = connection.execute(
+            """
+            select
+                term_id,
+                term_name,
+                official_definition,
+                related_terms
+            from terms
+            where term_id = any(%(term_ids)s)
+            """,
+            {"term_ids": term_ids},
         )
-    return terms
+        rows_by_id = {int(row["term_id"]): row for row in cursor.fetchall()}
+
+        terms: list[TermDocument] = []
+        for term_id in term_ids:
+            row = rows_by_id.get(term_id)
+            if not row:
+                continue
+            terms.append(
+                TermDocument(
+                    term_id=int(row["term_id"]),
+                    term_name=str(row["term_name"]),
+                    official_definition=row.get("official_definition"),
+                    related_terms=list(row.get("related_terms") or []),
+                )
+            )
+        return terms
+    finally:
+        if owns_connection:
+            close_connection(connection)
 
 
 def attach_similarity(terms: list[TermDocument], hits: list[SearchHit]) -> list[TermDocument]:
@@ -193,6 +209,14 @@ def retrieve(
     connection: DbConnection | None = None,
     match_count: int = DEFAULT_MATCH_COUNT,
 ) -> RetrievalResult:
-    query_embedding = create_query_embedding(query, embeddings_client)
-    hits = search_index(query_embedding, connection=connection, match_count=match_count)
-    return apply_thresholds(hits, connection=connection)
+    owns_connection = connection is None
+    if connection is None:
+        connection = get_database_connection()
+
+    try:
+        query_embedding = create_query_embedding(query, embeddings_client)
+        hits = search_index(query_embedding, connection=connection, match_count=match_count)
+        return apply_thresholds(hits, connection=connection)
+    finally:
+        if owns_connection:
+            close_connection(connection)
