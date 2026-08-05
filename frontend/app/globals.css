@@ -12,6 +12,34 @@ body {
   margin: 0;
 }
 
+.chatScreen {
+  width: min(720px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 64px 0;
+}
+
+.questionForm {
+  display: flex;
+  gap: 8px;
+  margin: 32px 0;
+}
+
+.questionForm input {
+  flex: 1;
+  padding: 12px;
+}
+
+.questionForm button {
+  padding: 0 16px;
+}
+
+.answerCard {
+  margin: 16px 0;
+  padding: 20px;
+  border-radius: 12px;
+  background: white;
+}
+
 .initialScreen {
   display: grid;
   min-height: 100vh;
