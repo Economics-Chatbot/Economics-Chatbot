@@ -13,8 +13,6 @@ class Settings(BaseSettings):
     openai_chat_model: str = Field(default="gpt-4.1-mini", alias="OPENAI_CHAT_MODEL")
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
     supabase_service_role_key: str = Field(default="", alias="SUPABASE_SERVICE_ROLE_KEY")
-    retrieval_top_k: int = Field(default=3, alias="RETRIEVAL_TOP_K")
-    retrieval_min_score: float = Field(default=0.72, alias="RETRIEVAL_MIN_SCORE")
 
     model_config = SettingsConfigDict(env_file=(".env", "../.env"), extra="ignore")
 
