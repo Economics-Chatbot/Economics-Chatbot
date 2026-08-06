@@ -9,9 +9,15 @@ from app.services.retrieval import (
     RetrievalResult,
     create_query_embedding,
     format_vector,
+    normalize_query,
     retrieve,
     search_index,
 )
+
+
+def test_normalize_query_removes_question_expression_and_particle() -> None:
+    assert normalize_query(" 기준금리는 뭐야? ") == "기준금리"
+    assert normalize_query("인플레이션이 무엇인가") == "인플레이션"
 
 
 class FakeEmbeddingsClient:
