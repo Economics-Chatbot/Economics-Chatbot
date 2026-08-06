@@ -21,6 +21,8 @@ from app.models.schemas import (
 from app.services.llm import LLMClient, LLMError, LLMTimeoutError
 from app.services.retrieval import RetrievalResult, TermDocument
 
+DELTA_CHUNK_SIZE = 32
+
 
 def sse(event: str, data: Any) -> str:
     payload = data.model_dump() if hasattr(data, "model_dump") else data
@@ -96,6 +98,31 @@ class _SectionStreamer:
             return result
 
 
+class _DeltaBatcher:
+    def __init__(self, chunk_size: int = DELTA_CHUNK_SIZE) -> None:
+        self.chunk_size = chunk_size
+        self.section: str | None = None
+        self.pending = ""
+
+    def feed(self, section: str, text: str) -> list[tuple[str, str]]:
+        result: list[tuple[str, str]] = []
+        if self.section != section:
+            result.extend(self.finish())
+            self.section = section
+        self.pending += text
+        while len(self.pending) >= self.chunk_size:
+            result.append((section, self.pending[:self.chunk_size]))
+            self.pending = self.pending[self.chunk_size:]
+        return result
+
+    def finish(self) -> list[tuple[str, str]]:
+        if self.section is None or not self.pending:
+            return []
+        result = [(self.section, self.pending)]
+        self.pending = ""
+        return result
+
+
 async def _stream_term(
     *,
     query: str,
@@ -109,6 +136,7 @@ async def _stream_term(
     )
     chunks: list[str] = []
     section_streamer = _SectionStreamer()
+    delta_batcher = _DeltaBatcher()
     try:
         retrieval_result = RetrievalResult(status="matched", terms=[term])
         async for chunk in llm_client.stream_answer(
@@ -117,11 +145,13 @@ async def _stream_term(
         ):
             chunks.append(chunk)
             for section, visible in section_streamer.feed(chunk):
-                if visible:
-                    yield sse("delta", DeltaData(index=index, section=section, text=visible))
+                for batched_section, text in delta_batcher.feed(section, visible):
+                    yield sse("delta", DeltaData(index=index, section=batched_section, text=text))
         for section, visible in section_streamer.finish():
-            if visible:
-                yield sse("delta", DeltaData(index=index, section=section, text=visible))
+            for batched_section, text in delta_batcher.feed(section, visible):
+                yield sse("delta", DeltaData(index=index, section=batched_section, text=text))
+        for section, text in delta_batcher.finish():
+            yield sse("delta", DeltaData(index=index, section=section, text=text))
         answer = _parse_answer(term.term_name, "".join(chunks), term.related_terms)
     except asyncio.CancelledError:
         raise
