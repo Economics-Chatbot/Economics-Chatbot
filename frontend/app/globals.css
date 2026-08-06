@@ -811,3 +811,237 @@ html, body {
 .feedback-action-button:hover {
   background-color: #1d4ed8;
 }
+
+/* Desktop workspace
+ * Keep the mobile state model intact, but give wide screens a stable
+ * navigation/character rail and a dedicated conversation canvas.
+ */
+@media (min-width: 1024px) {
+  :root {
+    --desktop-rail-width: 360px;
+    --desktop-gutter: 32px;
+  }
+
+  html,
+  body {
+    min-width: 1024px;
+    background:
+      radial-gradient(circle at 12% 18%, rgba(56, 189, 248, 0.16), transparent 26%),
+      radial-gradient(circle at 88% 82%, rgba(37, 99, 235, 0.10), transparent 30%),
+      #eef4ff;
+  }
+
+  .frame-app-mobile {
+    width: min(calc(100vw - 64px), 1280px);
+    max-width: 1280px;
+    height: min(calc(100dvh - 48px), 900px);
+    min-height: 720px;
+    margin: 24px auto;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 32px;
+    background: #ffffff;
+    box-shadow: 0 28px 70px rgba(30, 64, 175, 0.14);
+  }
+
+  .frame-app-mobile::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--desktop-rail-width);
+    background: linear-gradient(160deg, #f7fbff 0%, #edf5ff 100%);
+    border-right: 1px solid #dbeafe;
+    z-index: 0;
+  }
+
+  .chunk-header {
+    top: 28px;
+    left: 32px;
+    right: auto;
+    width: calc(var(--desktop-rail-width) - 64px);
+    justify-content: flex-start;
+  }
+
+  .ui-header-brand {
+    font-size: 30px;
+    line-height: 38px;
+  }
+
+  .ui-header-jelly-button {
+    display: none;
+  }
+
+  .ui-header-back-button {
+    left: 0;
+  }
+
+  .app:not([data-screen="home-idle"]):not([data-screen="home-typing"]) .ui-header-brand {
+    margin-left: 52px;
+    font-size: 25px;
+  }
+
+  .chunk-character-stage {
+    width: var(--desktop-rail-width);
+    height: 100%;
+  }
+
+  .ui-character-wrapper {
+    top: 220px;
+    width: 230px;
+    height: 230px;
+  }
+
+  .ui-character-image {
+    width: 230px;
+    height: 230px;
+  }
+
+  .ui-character-shadow {
+    top: 438px;
+    width: 178px;
+  }
+
+  .stage-decorations {
+    top: 185px;
+    width: 360px;
+  }
+
+  .app[data-character-layout="result"] .ui-character-wrapper {
+    transform: translateX(-50%) scale(0.78);
+  }
+
+  .app[data-character-layout="result"] .ui-character-shadow {
+    top: 430px;
+    width: 128px;
+    height: 10px;
+  }
+
+  .app[data-character-layout="result"] .stage-decorations {
+    opacity: 0.55;
+  }
+
+  .home-only {
+    left: var(--desktop-rail-width);
+    width: calc(100% - var(--desktop-rail-width));
+    background: #ffffff;
+  }
+
+  .home-content-wrapper {
+    min-height: 100%;
+    padding: 0 clamp(64px, 8vw, 132px) 110px;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  .chunk-home-intro,
+  .chunk-home-guide {
+    width: 100%;
+    text-align: left;
+  }
+
+  .type-home-title {
+    font-size: 38px;
+    line-height: 52px;
+    letter-spacing: -1px;
+  }
+
+  .chunk-home-guide {
+    margin-top: 4px;
+    margin-bottom: 36px;
+    font-size: 16px;
+    line-height: 26px;
+  }
+
+  .chunk-home-suggestions {
+    width: min(100%, 680px);
+    gap: 12px;
+  }
+
+  .ui-section-title-left {
+    margin-bottom: 6px;
+    font-size: 14px;
+  }
+
+  .ui-suggestion-pill-button {
+    height: 58px;
+    padding: 0 22px;
+    font-size: 16px;
+  }
+
+  .result-only {
+    position: absolute;
+    inset: 0 0 0 var(--desktop-rail-width);
+  }
+
+  .chunk-answer-viewport {
+    top: 0;
+    height: 100%;
+    padding: 56px clamp(56px, 7vw, 104px) 128px;
+    background: #ffffff;
+  }
+
+  .chunk-answer-viewport > * {
+    max-width: 760px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .chunk-query-bubble {
+    margin-left: auto;
+    margin-right: 0;
+    max-width: 520px;
+  }
+
+  .chunk-term-card,
+  .chunk-answer-content,
+  .chunk-status-feedback {
+    border-radius: 24px;
+  }
+
+  .chunk-answer-content {
+    padding: 24px;
+  }
+
+  .answer-section-body {
+    font-size: 15px;
+    line-height: 25px;
+  }
+
+  .chunk-input-dock {
+    position: absolute;
+    left: calc(var(--desktop-rail-width) + clamp(56px, 7vw, 104px));
+    bottom: 28px;
+    width: min(
+      760px,
+      calc(100% - var(--desktop-rail-width) - (clamp(56px, 7vw, 104px) * 2))
+    );
+    height: 64px;
+    padding-left: 24px;
+    border-radius: 32px;
+  }
+
+  .ui-send-button {
+    width: 50px;
+    height: 50px;
+  }
+}
+
+@media (min-width: 1024px) and (max-height: 780px) {
+  .frame-app-mobile {
+    height: calc(100dvh - 24px);
+    min-height: 680px;
+    margin: 12px auto;
+  }
+
+  .ui-character-wrapper {
+    top: 176px;
+  }
+
+  .ui-character-shadow,
+  .app[data-character-layout="result"] .ui-character-shadow {
+    top: 394px;
+  }
+
+  .stage-decorations {
+    top: 142px;
+  }
+}
