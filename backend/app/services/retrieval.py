@@ -13,6 +13,7 @@ from app.core.retrieval_config import CANDIDATE_THRESHOLD, HIGH_CONFIDENCE_THRES
 
 DEFAULT_MATCH_COUNT = 3
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 RetrievalStatus = Literal["matched", "candidates", "not_found"]
 
 

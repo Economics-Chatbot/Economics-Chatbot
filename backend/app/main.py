@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -6,6 +8,11 @@ from app.api.routes.answers import router as answers_router
 from app.api.routes.retrieval import router as retrieval_router
 
 app = FastAPI(title="EconomyMate API", version="0.1.0")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+)
 
 app.add_middleware(
     CORSMiddleware,
