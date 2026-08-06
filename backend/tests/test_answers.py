@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import json
 
 from fastapi.testclient import TestClient
@@ -43,7 +43,7 @@ class FakeLLM(LLMClient):
             yield chunk
 
 
-def test_matched_answer_stream(monkeypatch) -> None:
+def test_matched_answer_stream_keeps_existing_sse_shape(monkeypatch) -> None:
     monkeypatch.setattr(answers_route, "retrieve", lambda query: matched(query))
     use_factory(monkeypatch, lambda: FakeLLM())
     response = client.post("/api/answers", json={"query": "inflation"})
@@ -53,7 +53,6 @@ def test_matched_answer_stream(monkeypatch) -> None:
     assert response.headers["cache-control"] == "no-cache"
     assert [name for name, _ in parsed][0] == "answer_start"
     assert [name for name, _ in parsed][-2:] == ["answer_done", "done"]
-    assert "delta" in [name for name, _ in parsed]
     assert [data["section"] for name, data in parsed if name == "delta"] == [
         "one_line_definition",
         "easy_explanation",
@@ -65,10 +64,14 @@ def test_matched_answer_stream(monkeypatch) -> None:
         "easy_explanation": "easy explanation",
         "example": "daily example",
         "related_keywords": ["price"],
-        "sources": [{"title": "한국은행 경제금융용어 800선", "url": None}],
+        "sources": [{"title": "\ud55c\uad6d\uc740\ud589 \uacbd\uc81c\uae08\uc735\uc6a9\uc5b4 800\uc120", "url": None}],
     }
-    assert parsed[0][1]["related_keywords"] == ["price"]
-    assert parsed[-1][1]["status"] == "completed"
+    assert parsed[-1][1] == {
+        "status": "completed",
+        "completed_indices": [0],
+        "failed_indices": [],
+        "message": None,
+    }
 
 
 def test_sse_delimiters_split_across_provider_chunks(monkeypatch) -> None:
@@ -84,34 +87,42 @@ def test_sse_delimiters_split_across_provider_chunks(monkeypatch) -> None:
     ]
 
 
-def test_candidates_return_json_and_do_not_call_llm(monkeypatch) -> None:
+def test_suggestions_payload_is_structured_sse_and_not_markdown(monkeypatch) -> None:
     called = False
 
     def factory():
         nonlocal called
         called = True
-        raise AssertionError("candidate must not call LLM")
+        raise AssertionError("suggestions must not call LLM")
 
     monkeypatch.setattr(answers_route, "retrieve", lambda query: RetrievalResult(
         status="candidates",
         candidates=[
-            TermDocument(2, "inflation", "official", similarity=0.61),
-            TermDocument(3, "deflation", "official", similarity=0.59),
+            TermDocument(2, "interest futures", "official", similarity=0.61),
+            TermDocument(3, "interest swap", "official", similarity=0.59),
         ],
     ))
     use_factory(monkeypatch, factory)
-    response = client.post("/api/answers", json={"query": "prices"})
+    response = client.post("/api/answers", json={"query": "interest"})
+    parsed = parse_events(response.text)
 
-    assert response.headers["content-type"] == "application/json"
-    assert response.json()["status"] == "candidates"
-    assert response.json()["candidates"] == [
-        {"rank": 1, "term_id": 2, "term_name": "inflation", "similarity": 0.61},
-        {"rank": 2, "term_id": 3, "term_name": "deflation", "similarity": 0.59},
-    ]
+    assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
+    assert [name for name, _ in parsed] == ["suggestions", "done"]
+    suggestions = parsed[0][1]
+    assert suggestions == {
+        "index": 0,
+        "query": "interest",
+        "suggestions": [
+            {"term_id": 2, "term": "interest futures", "query": "interest futures", "reason": None},
+            {"term_id": 3, "term": "interest swap", "query": "interest swap", "reason": None},
+        ],
+    }
+    assert all(name != "delta" for name, _ in parsed)
+    assert "- interest futures" not in response.text
     assert not called
 
 
-def test_candidates_are_limited_to_top3_and_sorted(monkeypatch) -> None:
+def test_suggestions_are_limited_to_top3_and_sorted(monkeypatch) -> None:
     monkeypatch.setattr(answers_route, "retrieve", lambda query: RetrievalResult(
         status="candidates",
         candidates=[
@@ -121,18 +132,51 @@ def test_candidates_are_limited_to_top3_and_sorted(monkeypatch) -> None:
             TermDocument(2, "second", None, similarity=0.6),
         ],
     ))
-    response = client.post("/api/answers", json={"query": "ambiguous"})
+    parsed = parse_events(client.post("/api/answers", json={"query": "ambiguous"}).text)
 
-    assert [item["term_name"] for item in response.json()["candidates"]] == ["first", "second", "third"]
-    assert [item["rank"] for item in response.json()["candidates"]] == [1, 2, 3]
+    assert [item["term"] for item in parsed[0][1]["suggestions"]] == ["first", "second", "third"]
+    assert [item["term_id"] for item in parsed[0][1]["suggestions"]] == [1, 2, 3]
 
 
-def test_not_found_returns_json(monkeypatch) -> None:
+def test_suggestions_do_not_emit_answer_events_or_call_llm(monkeypatch) -> None:
+    called = False
+
+    def factory():
+        nonlocal called
+        called = True
+        return FakeLLM()
+
+    monkeypatch.setattr(answers_route, "retrieve", lambda query: RetrievalResult(
+        status="candidates",
+        candidates=[TermDocument(2, "inflation", "official")],
+    ))
+    use_factory(monkeypatch, factory)
+    parsed = parse_events(client.post("/api/answers", json={"query": "prices"}).text)
+
+    assert [name for name, _ in parsed] == ["suggestions", "done"]
+    assert all(name not in {"answer_start", "delta", "answer_done"} for name, _ in parsed)
+    assert parsed[-1][1]["status"] == "suggestions"
+    assert not called
+
+
+def test_failure_without_candidates_does_not_call_llm(monkeypatch) -> None:
+    called = False
+
+    def factory():
+        nonlocal called
+        called = True
+        return FakeLLM()
+
     monkeypatch.setattr(answers_route, "retrieve", lambda query: RetrievalResult(status="not_found"))
-    response = client.post("/api/answers", json={"query": "unknown"})
-    assert response.headers["content-type"] == "application/json"
-    assert response.json()["status"] == "not_found"
-    assert response.json()["message"]
+    use_factory(monkeypatch, factory)
+    parsed = parse_events(client.post("/api/answers", json={"query": "unknown"}).text)
+
+    assert [name for name, _ in parsed] == ["failure", "done"]
+    assert parsed[0][1]["index"] == 0
+    assert parsed[0][1]["term"] == "unknown"
+    assert parsed[-1][1]["status"] == "failed"
+    assert all(name != "suggestions" for name, _ in parsed)
+    assert not called
 
 
 def test_timeout_and_llm_error_are_safe(monkeypatch) -> None:
@@ -148,32 +192,20 @@ def test_timeout_and_llm_error_are_safe(monkeypatch) -> None:
 
 def test_invalid_model_output_returns_generation_error(monkeypatch) -> None:
     monkeypatch.setattr(answers_route, "retrieve", lambda query: matched(query))
-    use_factory(monkeypatch, lambda: FakeLLM(["bad output"] ))
+    use_factory(monkeypatch, lambda: FakeLLM(["bad output"]))
     parsed = parse_events(client.post("/api/answers", json={"query": "inflation"}).text)
     assert parsed[-2][0] == "error"
     assert parsed[-2][1]["code"] == "answer_generation_failed"
 
 
-def test_selected_term_id_skips_retrieval_and_streams(monkeypatch) -> None:
-    monkeypatch.setattr(answers_route, "retrieve", lambda query: (_ for _ in ()).throw(AssertionError("no retrieval")))
-    monkeypatch.setattr(answers_route, "fetch_term_by_id", lambda term_id: TermDocument(7, "selected", "selected definition", ["related"]))
+def test_multiple_terms_preserve_indices_on_partial_success(monkeypatch) -> None:
+    monkeypatch.setattr(answers_route, "retrieve", lambda query: matched(query) if query == "first" else RetrievalResult(status="not_found"))
     use_factory(monkeypatch, lambda: FakeLLM())
-    parsed = parse_events(client.post("/api/answers", json={"selected_term_id": 7}).text)
-    assert [name for name, _ in parsed][0] == "answer_start"
-    assert parsed[0][1]["term"] == "selected"
-    assert parsed[-1][1]["status"] == "completed"
-
-
-def test_invalid_selected_term_id_returns_404(monkeypatch) -> None:
-    monkeypatch.setattr(answers_route, "fetch_term_by_id", lambda term_id: None)
-    response = client.post("/api/answers", json={"selected_term_id": 999})
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Invalid candidate"
-
-
-def test_selected_term_name_is_rejected() -> None:
-    response = client.post("/api/answers", json={"selected_term": "inflation"})
-    assert response.status_code == 422
+    parsed = parse_events(client.post("/api/answers", json={"query": "first, second"}).text)
+    indexed = [(name, data["index"]) for name, data in parsed if "index" in data]
+    assert indexed[0][1] == 0
+    assert indexed[-1][1] == 1
+    assert parsed[-1][1]["status"] == "partial"
 
 
 def test_client_cancellation_propagates() -> None:
@@ -199,4 +231,3 @@ async def _stream_for_test(llm: LLMClient):
 
     async for event in stream_events("inflation", lambda query: matched(query), lambda: llm):
         yield event
-

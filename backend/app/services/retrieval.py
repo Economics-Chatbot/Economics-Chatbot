@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -162,11 +162,6 @@ def fetch_terms(term_ids: list[int], *, connection: DbConnection | None = None) 
         return terms
 
 
-def fetch_term_by_id(term_id: int, *, connection: DbConnection | None = None) -> TermDocument | None:
-    terms = fetch_terms([term_id], connection=connection)
-    return terms[0] if terms else None
-
-
 def attach_similarity(terms: list[TermDocument], hits: list[SearchHit]) -> list[TermDocument]:
     similarity_by_id = {hit.term_id: hit.similarity for hit in hits}
     return [
@@ -182,13 +177,8 @@ def attach_similarity(terms: list[TermDocument], hits: list[SearchHit]) -> list[
 
 
 def apply_thresholds(hits: list[SearchHit], *, connection: DbConnection | None = None) -> RetrievalResult:
-    if not hits:
+    if not hits or hits[0].similarity < CANDIDATE_THRESHOLD:
         return RetrievalResult(status="not_found", hits=hits)
-
-    top_candidates = attach_similarity(
-        fetch_terms([hit.term_id for hit in hits], connection=connection),
-        hits,
-    )
 
     if hits[0].similarity >= HIGH_CONFIDENCE_THRESHOLD:
         matched_hits = [hit for hit in hits if hit.similarity >= HIGH_CONFIDENCE_THRESHOLD]
@@ -196,12 +186,16 @@ def apply_thresholds(hits: list[SearchHit], *, connection: DbConnection | None =
             fetch_terms([hit.term_id for hit in matched_hits], connection=connection),
             matched_hits,
         )
-        return RetrievalResult(status="matched", hits=hits, terms=terms, candidates=top_candidates)
+        return RetrievalResult(status="matched", hits=hits, terms=terms)
 
-    if hits[0].similarity >= CANDIDATE_THRESHOLD:
-        return RetrievalResult(status="candidates", hits=hits, candidates=top_candidates)
-
-    return RetrievalResult(status="not_found", hits=hits, candidates=top_candidates)
+    candidate_hits = [
+        hit for hit in hits if CANDIDATE_THRESHOLD <= hit.similarity < HIGH_CONFIDENCE_THRESHOLD
+    ]
+    candidates = attach_similarity(
+        fetch_terms([hit.term_id for hit in candidate_hits], connection=connection),
+        candidate_hits,
+    )
+    return RetrievalResult(status="candidates", hits=hits, candidates=candidates)
 
 
 def retrieve(

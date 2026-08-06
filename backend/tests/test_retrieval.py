@@ -8,7 +8,6 @@ from app.services import retrieval
 from app.services.retrieval import (
     RetrievalResult,
     create_query_embedding,
-    fetch_term_by_id,
     format_vector,
     retrieve,
     search_index,
@@ -143,7 +142,7 @@ def test_retrieve_returns_terms_for_high_similarity() -> None:
     assert result.status == "matched"
     assert result.terms[0].term_name == "base rate"
     assert result.terms[0].similarity == HIGH_CONFIDENCE_THRESHOLD
-    assert result.candidates[0].term_name == "base rate"
+    assert result.candidates == []
     assert not connection.closed
 
 
@@ -167,17 +166,9 @@ def test_retrieve_returns_candidates_for_medium_similarity() -> None:
     assert result.candidates[0].term_name == "household debt"
 
 
-def test_retrieve_returns_not_found_with_low_similarity_candidates() -> None:
+def test_retrieve_returns_not_found_for_low_similarity() -> None:
     connection = FakeConnection(
-        search_rows=[{"term_id": 30, "similarity": CANDIDATE_THRESHOLD - 0.01}],
-        term_rows=[
-            {
-                "term_id": 30,
-                "term_name": "near miss",
-                "official_definition": "A low-similarity candidate.",
-                "related_terms": [],
-            }
-        ],
+        search_rows=[{"term_id": 30, "similarity": CANDIDATE_THRESHOLD - 0.01}]
     )
 
     result = retrieve("unknown", embeddings_client=FakeEmbeddingsClient(), connection=connection)
@@ -185,24 +176,5 @@ def test_retrieve_returns_not_found_with_low_similarity_candidates() -> None:
     assert isinstance(result, RetrievalResult)
     assert result.status == "not_found"
     assert result.terms == []
-    assert result.candidates[0].term_name == "near miss"
-    assert len(connection.calls) == 2
-
-def test_fetch_term_by_id_uses_terms_table() -> None:
-    connection = FakeConnection(
-        search_rows=[],
-        term_rows=[
-            {
-                "term_id": 99,
-                "term_name": "selected",
-                "official_definition": "Selected definition.",
-                "related_terms": ["related"],
-            }
-        ],
-    )
-
-    term = fetch_term_by_id(99, connection=connection)
-
-    assert term is not None
-    assert term.term_name == "selected"
-    assert term.related_terms == ["related"]
+    assert result.candidates == []
+    assert len(connection.calls) == 1

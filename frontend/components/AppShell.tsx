@@ -282,9 +282,9 @@ export function AppShell() {
                   <RelatedKeywordChip
                     key={item.term_id}
                     variant="candidate"
-                    onClick={() => void submitQuestion(item.term_name)}
+                    onClick={() => void submitQuestion(item.query)}
                   >
-                    {item.term_name} (유사도 {(item.similarity * 100).toFixed(0)}%)
+                    {item.term}
                   </RelatedKeywordChip>
                 ))}
               </div>

@@ -10,13 +10,10 @@ from app.models.schemas import (
     Answer,
     AnswerDoneData,
     AnswerStartData,
-    CandidateItem,
-    CandidateResponse,
     DeltaData,
     DoneData,
     ErrorData,
     FailureData,
-    NotFoundResponse,
     Source,
     Suggestion,
     SuggestionsData,
@@ -25,9 +22,7 @@ from app.services.llm import LLMClient, LLMError, LLMTimeoutError
 from app.services.retrieval import RetrievalResult, TermDocument
 
 DELTA_CHUNK_SIZE = 32
-MAX_CANDIDATES = 3
-CANDIDATE_MESSAGE = "\uc544\ub798 \uc6a9\uc5b4 \uc911 \ucc3e\uc73c\uc2dc\ub294 \uac83\uc744 \uc120\ud0dd\ud574\uc8fc\uc138\uc694."
-NOT_FOUND_MESSAGE = "\uac80\uc0c9 \uacb0\uacfc\uac00 \uc5c6\uc2b5\ub2c8\ub2e4."
+MAX_SUGGESTIONS = 3
 
 
 def sse(event: str, data: Any) -> str:
@@ -36,7 +31,7 @@ def sse(event: str, data: Any) -> str:
 
 
 def extract_terms(query: str) -> list[str]:
-    terms = [part.strip(" .,?？！") for part in re.split(r"\s*(?:,|，|및|그리고)\s*", query)]
+    terms = [part.strip(" .,?\uff1f\uff01") for part in re.split(r"\s*(?:,|\uff0c|\ubc0f|\uadf8\ub9ac\uace0)\s*", query)]
     return [term for term in terms if term]
 
 
@@ -53,7 +48,7 @@ def _parse_answer(term: str, text: str, related_keywords: list[str]) -> Answer:
         easy_explanation=easy.strip(),
         example=example.strip(),
         related_keywords=related_keywords,
-        sources=[Source(title="한국은행 경제금융용어 800선")],
+        sources=[Source(title="\ud55c\uad6d\uc740\ud589 \uacbd\uc81c\uae08\uc735\uc6a9\uc5b4 800\uc120")],
     )
 
 
@@ -162,16 +157,16 @@ async def _stream_term(
     except asyncio.CancelledError:
         raise
     except LLMTimeoutError:
-        yield sse("error", ErrorData(index=index, code="llm_timeout", message="답변 생성 시간이 초과되었습니다.", retryable=True))
+        yield sse("error", ErrorData(index=index, code="llm_timeout", message="\ub2f5\ubcc0 \uc0dd\uc131 \uc2dc\uac04\uc774 \ucd08\uacfc\ub418\uc5c8\uc2b5\ub2c8\ub2e4.", retryable=True))
         return
     except LLMError:
-        yield sse("error", ErrorData(index=index, code="llm_error", message="답변 생성 중 오류가 발생했습니다.", retryable=True))
+        yield sse("error", ErrorData(index=index, code="llm_error", message="\ub2f5\ubcc0 \uc0dd\uc131 \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4.", retryable=True))
         return
     except ValueError:
-        yield sse("error", ErrorData(index=index, code="answer_generation_failed", message="답변 형식이 올바르지 않습니다."))
+        yield sse("error", ErrorData(index=index, code="answer_generation_failed", message="\ub2f5\ubcc0 \ud615\uc2dd\uc774 \uc62c\ubc14\ub974\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4."))
         return
     except Exception:
-        yield sse("error", ErrorData(index=index, code="answer_generation_failed", message="답변 생성 중 오류가 발생했습니다."))
+        yield sse("error", ErrorData(index=index, code="answer_generation_failed", message="\ub2f5\ubcc0 \uc0dd\uc131 \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4."))
         return
 
     yield sse("answer_done", AnswerDoneData(index=index, answer=answer))
@@ -181,62 +176,21 @@ def should_call_llm(result: RetrievalResult) -> bool:
     return result.status == "matched" and bool(result.terms) and bool(result.terms[0].official_definition)
 
 
-def sorted_candidate_terms(candidates: list[TermDocument]) -> list[TermDocument]:
-    return sorted(
+def build_suggestions(candidates: list[TermDocument]) -> list[Suggestion]:
+    sorted_candidates = sorted(
         candidates,
         key=lambda term: term.similarity if term.similarity is not None else -1.0,
         reverse=True,
-    )[:MAX_CANDIDATES]
-
-
-def build_candidate_response(candidates: list[TermDocument]) -> CandidateResponse:
-    return CandidateResponse(
-        message=CANDIDATE_MESSAGE,
-        candidates=[
-            CandidateItem(
-                rank=index,
-                term_id=term.term_id,
-                term_name=term.term_name,
-                similarity=term.similarity,
-            )
-            for index, term in enumerate(sorted_candidate_terms(candidates), start=1)
-        ],
-    )
-
-
-def build_not_found_response() -> NotFoundResponse:
-    return NotFoundResponse(message=NOT_FOUND_MESSAGE)
-
-
-async def stream_answer_events(
-    *,
-    query: str,
-    terms: list[TermDocument],
-    llm_client_factory: Callable[[], LLMClient],
-) -> AsyncIterator[str]:
-    completed: list[int] = []
-    errors: list[int] = []
-    for index, term in enumerate(terms):
-        before_errors = len(errors)
-        async for event in _stream_term(
-            query=query,
-            index=index,
-            term=term,
-            llm_client=llm_client_factory(),
-        ):
-            yield event
-            if event.startswith("event: error"):
-                errors.append(index)
-        if len(errors) == before_errors:
-            completed.append(index)
-
-    if completed and errors:
-        status = "partial"
-    elif completed:
-        status = "completed"
-    else:
-        status = "error"
-    yield sse("done", DoneData(status=status, completed_indices=completed, failed_indices=errors))
+    )[:MAX_SUGGESTIONS]
+    return [
+        Suggestion(
+            term_id=term.term_id,
+            term=term.term_name,
+            query=term.term_name,
+            reason=None,
+        )
+        for term in sorted_candidates
+    ]
 
 
 async def stream_events(
@@ -257,7 +211,7 @@ async def stream_events(
             raise
         except Exception:
             errors.append(index)
-            yield sse("error", ErrorData(index=index, code="retrieval_failed", message="검색 처리 중 오류가 발생했습니다."))
+            yield sse("error", ErrorData(index=index, code="retrieval_failed", message="\uac80\uc0c9 \ucc98\ub9ac \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4."))
             continue
 
         if should_call_llm(result):
@@ -277,8 +231,14 @@ async def stream_events(
 
         if result.candidates:
             suggested = True
-            suggestions = [Suggestion(term=item.term_name) for item in sorted_candidate_terms(result.candidates)]
-            yield sse("suggestions", SuggestionsData(index=index, term=term_text, suggestions=suggestions))
+            yield sse(
+                "suggestions",
+                SuggestionsData(
+                    index=index,
+                    query=term_text,
+                    suggestions=build_suggestions(result.candidates),
+                ),
+            )
             continue
 
         failed.append(index)
