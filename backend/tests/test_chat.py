@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.api.routes import chat as chat_route
 from app.main import app
-from app.services.chat import stream_chat_answer
+from app.services.chat import build_candidate_response, build_not_found_response, stream_chat_answer
 from app.services.llm import LLMClient, LLMError, LLMTimeoutError, OpenAILLMClient
 from app.services.prompt import build_messages, build_user_prompt
 from app.services.retrieval import RetrievalResult, SearchHit, TermDocument
@@ -26,30 +26,41 @@ class FakeLLMClient(LLMClient):
             yield token
 
 
+def matched_term() -> TermDocument:
+    return TermDocument(
+        term_id=1,
+        term_name="inflation",
+        official_definition="official definition from retrieval",
+        related_terms=["prices", "deflation"],
+        similarity=0.91,
+    )
+
+
 def matched_result() -> RetrievalResult:
     return RetrievalResult(
         status="matched",
         hits=[SearchHit(term_id=1, similarity=0.91)],
-        terms=[
-            TermDocument(
-                term_id=1,
-                term_name="inflation",
-                official_definition="official definition from retrieval",
-                related_terms=["prices", "deflation"],
-                similarity=0.91,
-            )
-        ],
+        terms=[matched_term()],
+        candidates=[matched_term()],
     )
 
 
 def candidate_result() -> RetrievalResult:
     return RetrievalResult(
         status="candidates",
-        hits=[SearchHit(term_id=2, similarity=0.61)],
+        hits=[SearchHit(term_id=2, similarity=0.61), SearchHit(term_id=3, similarity=0.59)],
         candidates=[
             TermDocument(term_id=2, term_name="virtual asset", official_definition=None, similarity=0.61),
             TermDocument(term_id=3, term_name="ICO", official_definition=None, similarity=0.59),
         ],
+    )
+
+
+def not_found_with_candidates_result() -> RetrievalResult:
+    return RetrievalResult(
+        status="not_found",
+        hits=[SearchHit(term_id=4, similarity=0.41)],
+        candidates=[TermDocument(term_id=4, term_name="low match", official_definition=None, similarity=0.41)],
     )
 
 
@@ -90,30 +101,30 @@ def test_matched_starts_streaming_from_llm() -> None:
     assert llm.calls == 1
 
 
-def test_candidate_does_not_call_llm() -> None:
-    llm = FakeLLMClient()
+def test_candidate_response_schema() -> None:
+    response = build_candidate_response(candidate_result().candidates)
 
-    text = asyncio.run(
-        collect(stream_chat_answer(user_query="question", retrieval_result=candidate_result(), llm_client=llm))
-    )
-
-    assert "virtual asset" in text
-    assert "ICO" in text
-    assert llm.calls == 0
+    assert response.status == "candidates"
+    assert response.candidates[0].rank == 1
+    assert response.candidates[0].term_id == 2
+    assert response.candidates[0].term_name == "virtual asset"
+    assert response.candidates[0].similarity == 0.61
 
 
-def test_not_found_does_not_call_llm() -> None:
-    llm = FakeLLMClient()
+def test_not_found_response_schema() -> None:
+    response = build_not_found_response()
 
-    text = asyncio.run(
-        collect(stream_chat_answer(user_query="question", retrieval_result=not_found_result(), llm_client=llm))
-    )
-
-    assert text
-    assert llm.calls == 0
+    assert response.status == "not_found"
+    assert response.message
 
 
-def test_chat_route_returns_streaming_response(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_should_stream_answer_is_the_single_llm_gate() -> None:
+    assert chat_route.should_stream_answer(matched_result()) is True
+    assert chat_route.should_stream_answer(candidate_result()) is False
+    assert chat_route.should_stream_answer(not_found_result()) is False
+
+
+def test_chat_route_matched_returns_streaming_response(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_llm = FakeLLMClient(tokens=["stream", "ed"])
     app.dependency_overrides[chat_route.get_llm_client_factory] = lambda: lambda: fake_llm
     monkeypatch.setattr(chat_route, "retrieve", lambda query: matched_result())
@@ -130,7 +141,7 @@ def test_chat_route_returns_streaming_response(monkeypatch: pytest.MonkeyPatch) 
     assert fake_llm.calls == 1
 
 
-def test_chat_route_candidate_does_not_create_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_chat_route_candidates_returns_json_and_does_not_create_llm(monkeypatch: pytest.MonkeyPatch) -> None:
     created = False
 
     def factory():
@@ -147,8 +158,101 @@ def test_chat_route_candidate_does_not_create_llm(monkeypatch: pytest.MonkeyPatc
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert "virtual asset" in response.text
+    assert response.headers["content-type"] == "application/json"
+    payload = response.json()
+    assert payload["status"] == "candidates"
+    assert payload["message"]
+    assert payload["candidates"] == [
+        {"rank": 1, "term_id": 2, "term_name": "virtual asset", "similarity": 0.61},
+        {"rank": 2, "term_id": 3, "term_name": "ICO", "similarity": 0.59},
+    ]
     assert created is False
+
+
+def test_chat_route_low_similarity_candidates_returns_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(chat_route, "retrieve", lambda query: not_found_with_candidates_result())
+
+    response = TestClient(app).post("/chat", json={"query": "unclear"})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "candidates"
+    assert response.json()["candidates"][0]["term_name"] == "low match"
+
+
+def test_chat_route_not_found_returns_json_and_does_not_create_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    created = False
+
+    def factory():
+        nonlocal created
+        created = True
+        return FakeLLMClient()
+
+    app.dependency_overrides[chat_route.get_llm_client_factory] = lambda: factory
+    monkeypatch.setattr(chat_route, "retrieve", lambda query: not_found_result())
+
+    try:
+        response = TestClient(app).post("/chat", json={"query": "nothing"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "not_found"
+    assert response.json()["message"]
+    assert created is False
+
+
+def test_chat_route_selected_term_id_skips_retrieval_and_streams(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_llm = FakeLLMClient(tokens=["selected"])
+    retrieved = False
+
+    def fail_retrieve(query: str):
+        nonlocal retrieved
+        retrieved = True
+        raise AssertionError("retrieval must not run")
+
+    app.dependency_overrides[chat_route.get_llm_client_factory] = lambda: lambda: fake_llm
+    monkeypatch.setattr(chat_route, "retrieve", fail_retrieve)
+    monkeypatch.setattr(chat_route, "fetch_term_by_id", lambda term_id: matched_term())
+
+    try:
+        response = TestClient(app).post("/chat", json={"selected_term_id": 1})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
+    assert response.text == "data: selected\n\n"
+    assert fake_llm.calls == 1
+    assert retrieved is False
+
+
+def test_chat_route_selected_term_name_is_not_supported(monkeypatch: pytest.MonkeyPatch) -> None:
+    called = False
+
+    def retrieve_spy(query: str):
+        nonlocal called
+        called = True
+        return matched_result()
+
+    monkeypatch.setattr(chat_route, "retrieve", retrieve_spy)
+
+    response = TestClient(app).post("/chat", json={"selected_term": "inflation"})
+
+    assert response.status_code == 422
+    assert called is False
+
+
+def test_chat_route_invalid_selected_term_id_returns_404(monkeypatch: pytest.MonkeyPatch) -> None:
+    app.dependency_overrides[chat_route.get_llm_client_factory] = lambda: lambda: FakeLLMClient()
+    monkeypatch.setattr(chat_route, "fetch_term_by_id", lambda term_id: None)
+
+    try:
+        response = TestClient(app).post("/chat", json={"selected_term_id": 999})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "selected term not found"
 
 
 class FakeOpenAIStream:

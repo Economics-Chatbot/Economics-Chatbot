@@ -3,11 +3,13 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 
+from app.models.schemas import ChatCandidate, ChatCandidateResponse, ChatNotFoundResponse
 from app.services.llm import LLMClient, LLMError, LLMTimeoutError
-from app.services.retrieval import RetrievalResult
+from app.services.retrieval import RetrievalResult, TermDocument
 
 
-NOT_FOUND_MESSAGE = "\uac80\uc0c9 \uacb0\uacfc\ub97c \ucc3e\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4.\n\ub2e4\ub978 \ud45c\ud604\uc73c\ub85c \uc9c8\ubb38\ud574\uc8fc\uc138\uc694."
+CANDIDATE_MESSAGE = "\uc544\ub798 \uc6a9\uc5b4 \uc911 \ucc3e\uc73c\uc2dc\ub294 \uac83\uc744 \uc120\ud0dd\ud574\uc8fc\uc138\uc694."
+NOT_FOUND_MESSAGE = "\uac80\uc0c9 \uacb0\uacfc\uac00 \uc5c6\uc2b5\ub2c8\ub2e4."
 
 
 async def stream_chat_answer(
@@ -16,14 +18,6 @@ async def stream_chat_answer(
     retrieval_result: RetrievalResult,
     llm_client: LLMClient,
 ) -> AsyncIterator[str]:
-    if retrieval_result.status == "not_found":
-        yield NOT_FOUND_MESSAGE
-        return
-
-    if retrieval_result.status == "candidates":
-        yield format_candidate_message(retrieval_result)
-        return
-
     try:
         async for token in llm_client.stream_answer(
             user_query=user_query,
@@ -59,9 +53,20 @@ def format_sse_data(token: str) -> str:
     return "".join(f"data: {line}\n" for line in lines) + "\n"
 
 
-def format_candidate_message(retrieval_result: RetrievalResult) -> str:
-    names = [term.term_name for term in retrieval_result.candidates]
-    if not names:
-        return NOT_FOUND_MESSAGE
-    bullets = "\n".join(f"- {name}" for name in names)
-    return f"\ud639\uc2dc \uc544\ub798 \uc6a9\uc5b4\ub97c \ub9d0\uc500\ud558\uc168\ub098\uc694?\n\n{bullets}\n\n\uc6d0\ud558\uc2dc\ub294 \uc6a9\uc5b4\ub85c \ub2e4\uc2dc \uc9c8\ubb38\ud574\uc8fc\uc138\uc694."
+def build_candidate_response(candidates: list[TermDocument]) -> ChatCandidateResponse:
+    return ChatCandidateResponse(
+        message=CANDIDATE_MESSAGE,
+        candidates=[
+            ChatCandidate(
+                rank=index,
+                term_id=term.term_id,
+                term_name=term.term_name,
+                similarity=term.similarity,
+            )
+            for index, term in enumerate(candidates[:3], start=1)
+        ],
+    )
+
+
+def build_not_found_response() -> ChatNotFoundResponse:
+    return ChatNotFoundResponse(message=NOT_FOUND_MESSAGE)

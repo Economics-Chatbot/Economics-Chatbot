@@ -8,6 +8,7 @@ from app.services import retrieval
 from app.services.retrieval import (
     RetrievalResult,
     create_query_embedding,
+    fetch_term_by_id,
     format_vector,
     retrieve,
     search_index,
@@ -48,8 +49,11 @@ class FakeConnection:
         if "from search_index si" in query:
             return FakeCursor(self.search_rows[: int(params["match_count"])])
         if "from terms" in query:
-            term_ids = params["term_ids"]
-            return FakeCursor([row for row in self.term_rows if row["term_id"] in term_ids])
+            if "term_ids" in params:
+                term_ids = params["term_ids"]
+                return FakeCursor([row for row in self.term_rows if row["term_id"] in term_ids])
+            if "term_name" in params:
+                return FakeCursor([row for row in self.term_rows if row["term_name"] == params["term_name"]])
         raise AssertionError(f"unexpected query: {query}")
 
     def close(self) -> None:
@@ -142,7 +146,7 @@ def test_retrieve_returns_terms_for_high_similarity() -> None:
     assert result.status == "matched"
     assert result.terms[0].term_name == "base rate"
     assert result.terms[0].similarity == HIGH_CONFIDENCE_THRESHOLD
-    assert result.candidates == []
+    assert result.candidates[0].term_name == "base rate"
     assert not connection.closed
 
 
@@ -166,9 +170,17 @@ def test_retrieve_returns_candidates_for_medium_similarity() -> None:
     assert result.candidates[0].term_name == "household debt"
 
 
-def test_retrieve_returns_not_found_for_low_similarity() -> None:
+def test_retrieve_returns_not_found_with_low_similarity_candidates() -> None:
     connection = FakeConnection(
-        search_rows=[{"term_id": 30, "similarity": CANDIDATE_THRESHOLD - 0.01}]
+        search_rows=[{"term_id": 30, "similarity": CANDIDATE_THRESHOLD - 0.01}],
+        term_rows=[
+            {
+                "term_id": 30,
+                "term_name": "near miss",
+                "official_definition": "A low-similarity candidate.",
+                "related_terms": [],
+            }
+        ],
     )
 
     result = retrieve("unknown", embeddings_client=FakeEmbeddingsClient(), connection=connection)
@@ -176,5 +188,24 @@ def test_retrieve_returns_not_found_for_low_similarity() -> None:
     assert isinstance(result, RetrievalResult)
     assert result.status == "not_found"
     assert result.terms == []
-    assert result.candidates == []
-    assert len(connection.calls) == 1
+    assert result.candidates[0].term_name == "near miss"
+    assert len(connection.calls) == 2
+
+def test_fetch_term_by_id_uses_terms_table() -> None:
+    connection = FakeConnection(
+        search_rows=[],
+        term_rows=[
+            {
+                "term_id": 99,
+                "term_name": "selected",
+                "official_definition": "Selected definition.",
+                "related_terms": ["related"],
+            }
+        ],
+    )
+
+    term = fetch_term_by_id(99, connection=connection)
+
+    assert term is not None
+    assert term.term_name == "selected"
+    assert term.related_terms == ["related"]

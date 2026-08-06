@@ -71,3 +71,26 @@ class DoneData(BaseModel):
     completed_indices: list[int] = Field(default_factory=list)
     failed_indices: list[int] = Field(default_factory=list)
     message: str | None = None
+
+
+class ChatRequest(BaseModel):
+    query: str | None = Field(default=None, min_length=1, max_length=2_000)
+    selected_term_id: int | None = Field(default=None, ge=1)
+
+
+class ChatCandidate(BaseModel):
+    rank: int = Field(ge=1)
+    term_id: int
+    term_name: str
+    similarity: float | None = None
+
+
+class ChatCandidateResponse(BaseModel):
+    status: str = "candidates"
+    message: str
+    candidates: list[ChatCandidate]
+
+
+class ChatNotFoundResponse(BaseModel):
+    status: str = "not_found"
+    message: str
