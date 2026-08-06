@@ -13,7 +13,11 @@ from app.core.retrieval_config import CANDIDATE_THRESHOLD, HIGH_CONFIDENCE_THRES
 
 DEFAULT_MATCH_COUNT = 3
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 RetrievalStatus = Literal["matched", "candidates", "not_found"]
+
+QUESTION_SUFFIXES = ("무엇인가요", "무엇인가", "알려줘", "설명해줘", "뭐야", "뭐지", "뭔데", "뭐냐", "뭐니")
+PARTICLE_SUFFIXES = ("에서", "으로", "이랑", "은", "는", "이", "가", "을", "를", "에", "로", "와", "과", "랑", "도", "만", "의")
 
 
 class EmbeddingsClient(Protocol):
@@ -59,6 +63,19 @@ def log_retrieval_result(query: str, result: RetrievalResult, *, method: str) ->
         [document.term_name for document in documents],
         [document.similarity for document in documents],
     )
+
+
+def normalize_query(query: str) -> str:
+    normalized = query.strip().rstrip("?!。？！").strip()
+    for suffix in QUESTION_SUFFIXES:
+        if normalized.endswith(suffix):
+            normalized = normalized[: -len(suffix)].strip()
+            break
+    for suffix in PARTICLE_SUFFIXES:
+        if normalized.endswith(suffix) and len(normalized) > len(suffix):
+            normalized = normalized[: -len(suffix)].strip()
+            break
+    return normalized or query.strip()
 
 
 def create_query_embedding(query: str, embeddings_client: EmbeddingsClient | None = None) -> list[float]:
@@ -251,8 +268,9 @@ def retrieve(
     connection: DbConnection | None = None,
     match_count: int = DEFAULT_MATCH_COUNT,
 ) -> RetrievalResult:
+    normalized_query = normalize_query(query)
     with managed_database_connection(connection) as active_connection:
-        query_embedding = create_query_embedding(query, embeddings_client)
+        query_embedding = create_query_embedding(normalized_query, embeddings_client)
         hits = search_index(query_embedding, connection=active_connection, match_count=match_count)
         result = apply_thresholds(hits, connection=active_connection)
         log_retrieval_result(query, result, method="embedding")
