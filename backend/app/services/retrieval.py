@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from contextlib import contextmanager
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Iterator, Literal, Protocol
 
@@ -11,6 +12,7 @@ from app.core.retrieval_config import CANDIDATE_THRESHOLD, HIGH_CONFIDENCE_THRES
 
 
 DEFAULT_MATCH_COUNT = 3
+logger = logging.getLogger(__name__)
 RetrievalStatus = Literal["matched", "candidates", "not_found"]
 
 
@@ -45,6 +47,18 @@ class RetrievalResult:
     hits: list[SearchHit] = field(default_factory=list)
     terms: list[TermDocument] = field(default_factory=list)
     candidates: list[TermDocument] = field(default_factory=list)
+
+
+def log_retrieval_result(query: str, result: RetrievalResult, *, method: str) -> None:
+    documents = result.terms or result.candidates
+    logger.info(
+        "retrieval query=%r method=%s status=%s result_terms=%s similarities=%s",
+        query,
+        method,
+        result.status,
+        [document.term_name for document in documents],
+        [document.similarity for document in documents],
+    )
 
 
 def create_query_embedding(query: str, embeddings_client: EmbeddingsClient | None = None) -> list[float]:
@@ -162,6 +176,38 @@ def fetch_terms(term_ids: list[int], *, connection: DbConnection | None = None) 
         return terms
 
 
+def fetch_term_by_name(term_name: str, *, connection: DbConnection | None = None) -> TermDocument | None:
+    with managed_database_connection(connection) as active_connection:
+        cursor = active_connection.execute(
+            """
+            select term_id, term_name, official_definition, related_terms
+            from terms
+            where lower(trim(term_name)) = lower(trim(%(term_name)s))
+            limit 1
+            """,
+            {"term_name": term_name},
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return TermDocument(
+            term_id=int(row["term_id"]),
+            term_name=str(row["term_name"]),
+            official_definition=row.get("official_definition"),
+            related_terms=list(row.get("related_terms") or []),
+        )
+
+
+def retrieve_by_term_name(term_name: str) -> RetrievalResult:
+    direct_term = fetch_term_by_name(term_name)
+    if direct_term and direct_term.official_definition:
+        result = RetrievalResult(status="matched", terms=[direct_term])
+        log_retrieval_result(term_name, result, method="term_name")
+        return result
+    logger.info("retrieval query=%r method=term_name status=not_found result_terms=[] similarities=[]", term_name)
+    return retrieve(term_name)
+
+
 def attach_similarity(terms: list[TermDocument], hits: list[SearchHit]) -> list[TermDocument]:
     similarity_by_id = {hit.term_id: hit.similarity for hit in hits}
     return [
@@ -208,4 +254,6 @@ def retrieve(
     with managed_database_connection(connection) as active_connection:
         query_embedding = create_query_embedding(query, embeddings_client)
         hits = search_index(query_embedding, connection=active_connection, match_count=match_count)
-        return apply_thresholds(hits, connection=active_connection)
+        result = apply_thresholds(hits, connection=active_connection)
+        log_retrieval_result(query, result, method="embedding")
+        return result

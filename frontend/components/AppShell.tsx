@@ -13,7 +13,7 @@ import { RelatedKeywordChip } from "@/components/RelatedKeywordChip";
 import { MessageList } from "@/components/MessageList";
 import { AnswerMessage, type AnswerMessageData } from "@/components/AnswerMessage";
 import { LoadingCard } from "@/components/LoadingCard";
-import { AnswerNetworkError, streamAnswers } from "@/lib/answers";
+import { AnswerNetworkError, streamAnswers, streamTermAnswer } from "@/lib/answers";
 
 type ChatMessage =
   | { id: string; type: "user"; text: string }
@@ -109,10 +109,10 @@ export function AppShell() {
   }, []);
 
   const handleSuggestionClick = (suggestionText: string) => {
-    void submitQuestion(suggestionText);
+    void submitQuestion(suggestionText, "query");
   };
 
-  const submitQuestion = async (rawQuery: string) => {
+  const submitQuestion = async (rawQuery: string, mode: "query" | "term" = "query") => {
     const trimmedQuery = rawQuery.trim();
     if (!trimmedQuery) return;
     if (["query-transition", "searching", "answer-streaming"].includes(screen)) return;
@@ -146,7 +146,8 @@ export function AppShell() {
     };
 
     try {
-      await streamAnswers(trimmedQuery, {
+      const stream = mode === "term" ? streamTermAnswer : streamAnswers;
+      await stream(trimmedQuery, {
         onAnswerStart: (data: AnswerStartData) => {
           setChatMessages((current) => [
             ...current,
@@ -345,7 +346,7 @@ export function AppShell() {
             <AnswerMessage
               key={message.id}
               message={message.data}
-              onKeywordClick={(keyword) => void submitQuestion(keyword)}
+              onKeywordClick={(keyword) => void submitQuestion(keyword, "term")}
             />
           ))}
 
@@ -363,7 +364,7 @@ export function AppShell() {
                   <RelatedKeywordChip
                     key={item.term_id}
                     variant="candidate"
-                    onClick={() => void submitQuestion(item.term)}
+                    onClick={() => void submitQuestion(item.term, "term")}
                   >
                     {item.term}
                   </RelatedKeywordChip>

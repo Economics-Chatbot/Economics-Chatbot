@@ -14,6 +14,12 @@ class AnswerRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class TermAnswerRequest(BaseModel):
+    term_name: str = Field(min_length=1, max_length=200)
+
+    model_config = {"extra": "forbid"}
+
+
 class Source(BaseModel):
     title: str
     url: str | None = None

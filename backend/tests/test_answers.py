@@ -74,6 +74,18 @@ def test_matched_answer_stream_keeps_existing_sse_shape(monkeypatch) -> None:
     }
 
 
+def test_term_answer_endpoint_uses_term_name_retrieval(monkeypatch) -> None:
+    monkeypatch.setattr(answers_route, "retrieve_by_term_name", lambda term_name: matched(term_name))
+    use_factory(monkeypatch, lambda: FakeLLM())
+    response = client.post("/api/answers/term", json={"term_name": "기준금리"})
+    parsed = parse_events(response.text)
+
+    assert response.status_code == 200
+    assert [name for name, _ in parsed][0] == "answer_start"
+    assert parsed[0][1]["term"] == "기준금리"
+    assert parsed[-1][1]["status"] == "completed"
+
+
 def test_sse_delimiters_split_across_provider_chunks(monkeypatch) -> None:
     monkeypatch.setattr(answers_route, "retrieve", lambda query: matched(query))
     use_factory(monkeypatch, lambda: FakeLLM(["definition", "\n<<<", "EASY>>>easy", "\n<<<EX", "AMPLE>>>example"]))
