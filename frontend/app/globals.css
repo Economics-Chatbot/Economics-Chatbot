@@ -1,52 +1,662 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@700&display=swap');
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+
 :root {
-  color: #17201a;
-  background: #f7f4ef;
-  font-family: system-ui, sans-serif;
+  --color-main-blue: #2563eb;
+  --color-deep-blue: #1e40af;
+  --color-sky-blue: #38bdf8;
+  --color-ice-blue: #e0f2fe;
+  --color-soft-blue-bg: #f8fafc;
+  --color-white: #ffffff;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #64748b;
+  --color-border: #cbd5e1;
+
+  --shadow-dock: 0 10px 25px -5px rgba(37, 99, 235, 0.12), 0 8px 16px -6px rgba(0, 0, 0, 0.05);
+  --shadow-float: 0 12px 28px -6px rgba(30, 64, 175, 0.12);
+
+  --font-brand: 'Fredoka', 'Arial Rounded MT Bold', sans-serif;
+  --font-body: 'Pretendard', 'Noto Sans KR', sans-serif;
+
+  --radius-pill: 9999px;
+  --radius-large: 24px;
+  --radius-medium: 16px;
+
+  --viewport-height: min(100dvh, 844px);
 }
 
 * {
   box-sizing: border-box;
-}
-
-body {
   margin: 0;
+  padding: 0;
 }
 
-.chatScreen {
-  width: min(720px, calc(100% - 32px));
+html, body {
+  width: 100%;
+  height: 100%;
+  background-color: #f1f5f9;
+  font-family: var(--font-body);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* 390 x 844px 레퍼런스 모바일 프레임 */
+.frame-app-mobile {
+  position: relative;
+  width: min(100%, 390px);
+  height: var(--viewport-height);
+  min-height: 640px;
+  max-height: 844px;
   margin: 0 auto;
-  padding: 64px 0;
-}
-
-.questionForm {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  overflow-x: hidden;
+  overflow-y: hidden;
   display: flex;
-  gap: 8px;
-  margin: 32px 0;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
 }
 
-.questionForm input {
-  flex: 1;
-  padding: 12px;
+/* 상단 헤더 CHUNK_HEADER */
+.chunk-header {
+  position: absolute;
+  top: 16px;
+  left: 20px;
+  width: 350px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
 }
 
-.questionForm button {
-  padding: 0 16px;
+.ui-header-brand {
+  font-family: var(--font-brand);
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 34px;
+  color: #1e3a8a;
+  text-align: center;
+  letter-spacing: -0.5px;
 }
 
-.answerCard {
-  margin: 16px 0;
-  padding: 20px;
-  border-radius: 12px;
-  background: white;
+.ui-header-back-button,
+.ui-header-info-button {
+  position: absolute;
+  top: 2px;
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20px;
 }
 
-.initialScreen {
-  display: grid;
-  min-height: 100vh;
-  place-content: center;
+.ui-header-back-button { left: 0; }
+.ui-header-info-button { right: 0; }
+
+/* 캐릭터 스테이지 CHUNK_CHARACTER_STAGE & 3D 장식 요소들 */
+.chunk-character-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 390px;
+  height: 354px;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.ui-character-wrapper {
+  position: absolute;
+  left: 103px;
+  top: 155px;
+  width: 184px;
+  height: 184px;
+  transform-origin: 50% 50%;
+  will-change: transform;
+  transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 결과 상태 캐릭터: 헤더 바로 아래 top 75px 부근 (translateY -80px) */
+.app[data-character-layout="result"] .ui-character-wrapper {
+  transform: translate3d(26px, -80px, 0) scale(0.717391);
+}
+
+.ui-character-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 184px;
+  height: 184px;
+  object-fit: contain;
+  object-position: center;
+  opacity: 0;
+  transition: opacity 160ms ease-in-out;
+  will-change: opacity;
+}
+
+.ui-character-image.active {
+  opacity: 1;
+}
+
+/* 캐릭터 그림자: 결과 시 top 195px에 위치하여 젤리 발 밑에 밀착 */
+.ui-character-shadow {
+  position: absolute;
+  left: 123px;
+  top: 320px;
+  width: 144px;
+  height: 14px;
+  background: radial-gradient(ellipse at center, rgba(30, 58, 138, 0.15) 0%, rgba(30, 58, 138, 0) 70%);
+  transition: all 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.app[data-character-layout="result"] .ui-character-shadow {
+  left: 143px;
+  top: 195px;
+  width: 104px;
+  height: 8px;
+}
+
+/* 3D/파스텔 장식 요소들 */
+.stage-decorations {
+  position: absolute;
+  top: 135px;
+  left: 0;
+  width: 390px;
+  height: 210px;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+
+.app[data-character-layout="result"] .stage-decorations {
+  opacity: 0;
+}
+
+/* 3D 물음표 1 */
+.deco-question-mark-1 {
+  position: absolute;
+  top: 20px;
+  right: 75px;
+  width: 26px;
+  height: 26px;
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: white;
+  font-weight: 800;
+  font-size: 15px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35);
+  transform: rotate(15deg);
+  animation: float-slow 3s ease-in-out infinite alternate;
+}
+
+/* 3D 물음표 2 */
+.deco-question-mark-2 {
+  position: absolute;
+  top: 85px;
+  right: 60px;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(135deg, #38bdf8, #0284c7);
+  color: white;
+  font-weight: 800;
+  font-size: 12px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 8px rgba(56, 189, 248, 0.3);
+  transform: rotate(-10deg);
+  animation: float-slow 2.8s ease-in-out infinite alternate 0.5s;
+}
+
+/* 보라색 3D 입체 구체 */
+.deco-orb-purple-large {
+  position: absolute;
+  top: 110px;
+  left: 55px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #d8b4fe, #a855f7 60%, #7e22ce);
+  box-shadow: 0 6px 16px rgba(168, 85, 247, 0.35);
+  animation: float-slow 2.5s ease-in-out infinite alternate;
+}
+
+/* 3D 하늘색 구체 */
+.deco-orb-cyan-top {
+  position: absolute;
+  top: 5px;
+  right: 125px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #67e8f9, #06b6d4);
+  box-shadow: 0 4px 10px rgba(6, 182, 212, 0.3);
+  animation: float-slow 3.2s ease-in-out infinite alternate;
+}
+
+/* 3D 주황색 구체 */
+.deco-orb-orange-small {
+  position: absolute;
+  top: 125px;
+  right: 85px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffb703, #fb8500);
+  box-shadow: 0 3px 8px rgba(251, 133, 0, 0.3);
+  animation: float-slow 2.2s ease-in-out infinite alternate 0.3s;
+}
+
+/* 십자 반짝이 별 */
+.deco-star-sparkle {
+  position: absolute;
+  top: 40px;
+  left: 85px;
+  color: #38bdf8;
+  font-size: 18px;
+  animation: pulse-star 2s ease-in-out infinite alternate;
+}
+
+@keyframes float-slow {
+  0% { transform: translateY(0) rotate(0deg); }
+  100% { transform: translateY(-8px) rotate(6deg); }
+}
+
+@keyframes pulse-star {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(1.25); opacity: 1; }
+}
+
+/* 홈 레이아웃 */
+.home-only {
+  transition: opacity 150ms ease-out;
+}
+
+.app[data-screen="query-transition"] .home-only,
+.app:not([data-screen="home-idle"]):not([data-screen="home-typing"]) .home-only {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 메인 타이틀 CHUNK_HOME_INTRO */
+.chunk-home-intro {
+  position: absolute;
+  left: 30px;
+  top: 360px;
+  width: 330px;
   text-align: center;
 }
 
-.initialScreen p {
-  color: #647067;
+.type-home-title {
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 36px;
+  letter-spacing: -0.5px;
+  color: #0f172a;
+  white-space: pre-line;
+}
+
+/* 서브 설명 CHUNK_HOME_GUIDE */
+.chunk-home-guide {
+  position: absolute;
+  left: 30px;
+  top: 442px;
+  width: 330px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 20px;
+  color: #64748b;
+}
+
+/* 추천 질문 세션 CHUNK_HOME_SUGGESTIONS */
+.chunk-home-suggestions {
+  position: absolute;
+  left: 24px;
+  top: 490px;
+  width: 342px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ui-section-title-left {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 13.5px;
+  line-height: 18px;
+  color: #2563eb;
+  text-align: left;
+  margin-bottom: 2px;
+}
+
+/* 알약 칩 버튼 */
+.ui-suggestion-pill-button {
+  width: 342px;
+  height: 50px;
+  padding: 0 18px;
+  background-color: #ffffff;
+  border: 1.5px solid #2563eb;
+  border-radius: var(--radius-pill);
+  color: #0f172a;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 150ms ease;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+}
+
+.ui-suggestion-pill-button:hover {
+  background-color: #f0f9ff;
+  border-color: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.ui-suggestion-pill-button:active {
+  transform: scale(0.98);
+}
+
+.icon-chip-circle {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  color: #0284c7;
+}
+
+/* 하단 DOCK 입력창 CHUNK_INPUT_DOCK */
+.chunk-input-dock {
+  position: absolute;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: 16px;
+  width: 358px;
+  height: 58px;
+  background-color: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 29px;
+  box-shadow: var(--shadow-dock);
+  display: flex;
+  align-items: center;
+  padding: 0 6px 0 20px;
+  z-index: 40;
+}
+
+.chunk-input-dock:focus-within {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+}
+
+.ui-textarea {
+  flex: 1;
+  height: 44px;
+  max-height: 88px;
+  padding: 11px 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: #0f172a;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+}
+
+.ui-textarea::placeholder {
+  color: #64748b;
+}
+
+.ui-send-button {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);
+}
+
+.ui-send-button:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.ui-send-button:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+/* 결과 화면 레이아웃 */
+.result-only {
+  opacity: 0;
+  transition: opacity 220ms ease-out 120ms;
+}
+
+.app:not([data-screen="home-idle"]):not([data-screen="home-typing"]) .result-only {
+  opacity: 1;
+}
+
+/* 사용자 질문 말풍선: 캐릭터 발밑 우측 (top: 180px, right: 20px) -> 겹침 0%! */
+.chunk-query-bubble {
+  position: absolute;
+  right: 20px;
+  top: 180px;
+  max-width: 258px;
+  min-height: 44px;
+  padding: 10px 16px;
+  background-color: var(--color-main-blue);
+  color: var(--color-white);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  border-radius: 18px 18px 4px 18px;
+  word-break: break-word;
+  z-index: 25;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
+/* 답변 & 피드백 카드 뷰포트: top 245px에서 시작하여 질문 말풍선과 에러 피드백 카드가 수직으로 완벽하게 나뉨! */
+.chunk-answer-viewport {
+  position: absolute;
+  top: 245px;
+  left: 0;
+  width: 390px;
+  height: calc(var(--viewport-height) - 245px);
+  padding: 0 20px calc(90px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.chunk-answer-viewport::-webkit-scrollbar {
+  display: none;
+}
+
+/* 답변 외곽 카드 */
+.chunk-term-card {
+  width: 350px;
+  padding: 16px 12px 12px;
+  background-color: var(--color-soft-blue-bg);
+  border: 1px solid #a8c7ff;
+  border-radius: var(--radius-large);
+  margin-bottom: 12px;
+}
+
+.chunk-term-header {
+  padding: 0 4px 12px;
+}
+
+.ui-term-eyebrow {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-deep-blue);
+  margin-bottom: 4px;
+}
+
+.ui-term-name {
+  font-size: 26px;
+  line-height: 35px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  word-break: break-word;
+}
+
+/* 내부 흰 본문 카드 */
+.chunk-answer-content {
+  width: 326px;
+  padding: 14px 12px;
+  background-color: var(--color-white);
+  border-radius: var(--radius-large);
+  box-shadow: var(--shadow-float);
+}
+
+.answer-section {
+  margin-bottom: 16px;
+}
+
+.answer-section:last-child {
+  margin-bottom: 0;
+}
+
+.answer-section-title {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--color-deep-blue);
+  margin-bottom: 6px;
+}
+
+.answer-section-body {
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.answer-divider {
+  width: 100%;
+  height: 1px;
+  background-color: var(--color-border);
+  margin: 12px 0 14px;
+}
+
+.chunk-source {
+  width: 342px;
+  margin: 0 auto 16px;
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.ui-source-label {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  width: 36px;
+  flex-shrink: 0;
+}
+
+.ui-source-value {
+  color: var(--color-text-secondary);
+}
+
+.chunk-related-terms {
+  width: 350px;
+  padding: 16px;
+  background-color: var(--color-soft-blue-bg);
+  border: 1px solid var(--color-ice-blue);
+  border-radius: var(--radius-large);
+  margin-bottom: 24px;
+}
+
+.related-term-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ui-related-term-button {
+  flex: 1 1 120px;
+  min-height: 38px;
+  padding: 0 16px;
+  background-color: var(--color-white);
+  border: 1px solid var(--color-ice-blue);
+  border-radius: var(--radius-medium);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--color-deep-blue);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.ui-related-term-button:hover {
+  background-color: var(--color-ice-blue);
+}
+
+/* 후보/실패/에러 피드백 카드 (질문 말풍선과 겹치지 않고 top 245px 아래로 깨끗하게 떨어짐) */
+.chunk-status-feedback {
+  width: 350px;
+  padding: 22px 18px;
+  background-color: var(--color-soft-blue-bg);
+  border: 1px solid #a8c7ff;
+  border-radius: var(--radius-large);
+  margin-bottom: 24px;
+  margin-top: 0;
+}
+
+.feedback-title {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+.feedback-desc {
+  font-size: 14px;
+  line-height: 22px;
+  color: #64748b;
+  margin-bottom: 20px;
+}
+
+.feedback-action-button {
+  height: 48px;
+  width: 100%;
+  padding: 0 20px;
+  background-color: var(--color-main-blue);
+  color: var(--color-white);
+  border: none;
+  border-radius: var(--radius-medium);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.feedback-action-button:hover {
+  background-color: #1d4ed8;
 }

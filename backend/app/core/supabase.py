@@ -11,10 +11,12 @@ def get_supabase_client() -> Client:
 
     if not settings.supabase_url:
         raise RuntimeError("SUPABASE_URL is required")
-    if not settings.supabase_service_role_key:
+
+    key = settings.supabase_service_role_key
+    if not key:
         raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY is required")
 
     return create_client(
         settings.supabase_url,
-        settings.supabase_service_role_key,
+        key,
     )

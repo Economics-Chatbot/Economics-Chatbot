@@ -3,11 +3,16 @@ app/main.py
 app/api/routes/answers.py
 app/api/routes/health.py
 app/core/config.py
+app/core/retrieval_config.py
 app/core/supabase.py
+
 app/models/__init__.py
 app/models/schemas.py
 app/services/__init__.py
 app/services/answers.py
+app/evaluation/__init__.py
+app/evaluation/retrieval_metrics.py
+app/services/retrieval.py
 economymate_backend.egg-info/PKG-INFO
 economymate_backend.egg-info/SOURCES.txt
 economymate_backend.egg-info/dependency_links.txt
@@ -16,3 +21,5 @@ economymate_backend.egg-info/top_level.txt
 tests/test_answers.py
 tests/test_health.py
 tests/test_populate_search_names.py
+tests/test_retrieval.py
+tests/test_retrieval_metrics.py
