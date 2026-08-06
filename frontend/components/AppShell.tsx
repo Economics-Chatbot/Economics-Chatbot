@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { ArrowLeft, ChartNoAxesColumnIncreasing, CircleHelp, PieChart } from "lucide-react";
-import type { Answer, AnswerDoneData, AnswerStartData, DeltaData, TermSuggestion } from "@/types/answers";
+import type { Answer, AnswerDoneData, AnswerSection, AnswerStartData, DeltaData, TermSuggestion } from "@/types/answers";
 import type { CharacterState, ScreenState } from "@/types/ui";
 import { ChatInput } from "@/components/ChatInput";
 import { SuggestedQuestions, type SuggestedQuestion } from "@/components/SuggestedQuestions";
@@ -18,6 +18,12 @@ import { streamAnswers } from "@/lib/answers";
 type ChatMessage =
   | { id: string; type: "user"; text: string }
   | { id: string; type: "answer"; data: AnswerMessageData };
+
+const EMPTY_SECTIONS: Record<AnswerSection, string> = {
+  one_line_definition: "",
+  easy_explanation: "",
+  example: "",
+};
 
 const MOTION = {
   closeEyesMs: 90,
@@ -119,15 +125,9 @@ export function AppShell() {
     setScreen("searching");
     setCharacter("thinking");
 
-    const termFromAnswer = (answer: Answer) => ({
-      term_id: 0,
-      term_name: answer.term,
-      official_definition: answer.one_line_definition,
-      related_terms: answer.related_keywords,
-    });
-    const updateAnswer = (update: (data: AnswerMessageData) => AnswerMessageData) => {
+    const updateAnswer = (index: number, update: (data: AnswerMessageData) => AnswerMessageData) => {
       setChatMessages((current) => current.map((message) => (
-        message.type === "answer" && message.id === answerId
+        message.type === "answer" && message.data.index === index
           ? { ...message, data: update(message.data) }
           : message
       )));
@@ -139,30 +139,39 @@ export function AppShell() {
           setChatMessages((current) => [
             ...current,
             {
-              id: answerId,
+              id: `${answerId}-${data.index}`,
               type: "answer",
               data: {
-                id: answerId,
-                term: {
-                  term_id: data.index,
-                  term_name: data.term,
-                  official_definition: "",
-                  related_terms: data.related_keywords,
-                },
-                content: "",
+                id: `${answerId}-${data.index}`,
+                index: data.index,
+                term: data.term,
+                relatedKeywords: data.related_keywords,
+                sections: { ...EMPTY_SECTIONS },
               },
             },
           ]);
           setScreen("answer-streaming");
         },
         onDelta: (data: DeltaData) => {
-          updateAnswer((current) => ({ ...current, content: current.content + data.text }));
+          updateAnswer(data.index, (current) => ({
+            ...current,
+            sections: {
+              ...current.sections,
+              [data.section]: current.sections[data.section] + data.text,
+            },
+          }));
         },
         onAnswerDone: (data: AnswerDoneData) => {
-          updateAnswer((current) => ({
+          updateAnswer(data.index, (current) => ({
             ...current,
-            term: termFromAnswer(data.answer),
-            content: data.answer.easy_explanation,
+            term: data.answer.term,
+            relatedKeywords: data.answer.related_keywords,
+            answer: data.answer,
+            sections: {
+              one_line_definition: data.answer.one_line_definition,
+              easy_explanation: data.answer.easy_explanation,
+              example: data.answer.example,
+            },
           }));
         },
         onSuggestions: (data) => {
@@ -308,7 +317,7 @@ export function AppShell() {
       {/* 모든 질문 결과 화면 (성공, 후보, 실패, 에러 포함) */}
       <div className="result-only">
         <MessageList
-          scrollKey={`${screen}:${chatMessages.map((message) => message.id + (message.type === "answer" ? message.data.content : message.text)).join("|")}:${suggestions.length}`}
+          scrollKey={`${screen}:${chatMessages.map((message) => message.id + (message.type === "answer" ? JSON.stringify(message.data.sections) : message.text)).join("|")}:${suggestions.length}`}
         >
           {chatMessages.map((message) => message.type === "user" ? (
             <UserMessage key={message.id}>{message.text}</UserMessage>
@@ -347,7 +356,7 @@ export function AppShell() {
           {screen === "failure" && (
             <ErrorCard
               title="관련 용어를 찾지 못했어요."
-              description="용어 이름이나 약어를 조금 더 정확하게 입력해 주세요."
+              description={failureMsg || "용어 이름이나 약어를 조금 더 정확하게 입력해 주세요."}
               actionLabel="다시 질문하기"
               onAction={() => setScreen("home-typing")}
             />
