@@ -1,3 +1,5 @@
+import React, { useState } from "react";
+import { Check, Copy } from "lucide-react";
 import type { Answer, AnswerSection } from "@/types/answers";
 import { RelatedKeywordChip } from "@/components/RelatedKeywordChip";
 
@@ -18,11 +20,41 @@ type AnswerMessageProps = {
 export function AnswerMessage({ message, onKeywordClick }: AnswerMessageProps) {
   const { term, relatedKeywords, sections, answer } = message;
   const keywords = answer?.related_keywords ?? [];
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    const text = [
+      term,
+      sections.one_line_definition,
+      "💡 쉬운 설명",
+      sections.easy_explanation,
+      "🏠 생활 속 예시",
+      sections.example,
+    ].filter(Boolean).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard permission is optional; the answer remains usable without it.
+    }
+  };
 
   return (
     <div className="chunk-term-card">
       <div className="chunk-term-header">
-        <div className="ui-term-eyebrow">한국은행 경제금융용어</div>
+        <div className="ui-term-eyebrow-row">
+          <div className="ui-term-eyebrow">한국은행 경제금융용어</div>
+          <button
+            type="button"
+            className={`ui-copy-button ${copied ? "copied" : ""}`}
+            onClick={handleCopy}
+            aria-label="용어 설명 복사하기"
+          >
+            {copied ? <Check size={15} /> : <Copy size={15} />}
+            <span>{copied ? "복사됨" : "복사"}</span>
+          </button>
+        </div>
         <div className="ui-term-name">{term}</div>
         <div className="answer-term-definition">{sections.one_line_definition}</div>
       </div>
