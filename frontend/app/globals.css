@@ -144,8 +144,13 @@ html, body {
   height: 184px;
   transform: translateX(-50%);
   transform-origin: 50% 50%;
-  will-change: transform;
-  transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, filter;
+  transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1), filter 600ms ease-in-out;
+}
+
+/* 20% 확률 이벤트: 산뜻한 주황색 젤리 변신 */
+.ui-character-wrapper.theme-orange-jelly {
+  filter: hue-rotate(-30deg) saturate(1.45) brightness(1.02);
 }
 
 /* 결과 상태 캐릭터: 헤더 바로 아래 top 75px 부근 (translateY -80px) */
@@ -168,6 +173,14 @@ html, body {
 
 .ui-character-image.active {
   opacity: 1;
+}
+
+.ui-character-image.blink-frame {
+  transition: none !important;
+}
+
+.ui-character-image.thinking-frame {
+  transition: opacity 250ms ease-in-out;
 }
 
 /* 캐릭터 그림자: 결과 시 top 195px에 위치하여 젤리 발 밑에 밀착 */

@@ -53,6 +53,7 @@ export function AppShell() {
   const [failureMsg, setFailureMsg] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string>("");
   
+  const [isOrangeJelly, setIsOrangeJelly] = useState(false);
   const requestTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const characterLayout = screen === "home-idle" || screen === "home-typing" ? "home" : "result";
@@ -67,18 +68,28 @@ export function AppShell() {
 
     let blinkTimer: ReturnType<typeof setTimeout>;
     let openTimer: ReturnType<typeof setTimeout>;
-    const scheduleBlink = () => {
+    const scheduleMotion = () => {
       blinkTimer = setTimeout(() => {
-        setCharacter("blink");
+        // 20% 확률로 서서히 주황색 젤리로 변신!
+        if (Math.random() < 0.20) {
+          setIsOrangeJelly(true);
+          setTimeout(() => setIsOrangeJelly(false), 3800);
+        }
+
+        const isThinking = Math.random() < 0.35;
+        const nextState: CharacterState = isThinking ? "thinking" : "blink";
+        const duration = isThinking ? 1200 : 300;
+
+        setCharacter(nextState);
         openTimer = setTimeout(() => {
           setCharacter("default");
-          scheduleBlink();
-        }, 150);
-      }, 2800 + Math.random() * 1800);
+          scheduleMotion();
+        }, duration);
+      }, 2500 + Math.random() * 1800);
     };
 
     setCharacter("default");
-    scheduleBlink();
+    scheduleMotion();
     return () => {
       clearTimeout(blinkTimer);
       clearTimeout(openTimer);
@@ -198,14 +209,14 @@ export function AppShell() {
 
       {/* 캐릭터 스테이지 & 3D 장식들 */}
       <div className="chunk-character-stage">
-        <div className="ui-character-wrapper">
+        <div className={`ui-character-wrapper ${isOrangeJelly ? "theme-orange-jelly" : ""}`}>
           {/* 이미지 1: 기본 미소 (눈 뜬 상태) */}
           <Image
             src="/assets/character-default.png"
             alt="옐로 메이트"
             width={184}
             height={184}
-            className={`ui-character-image ${character === "default" ? "active" : ""}`}
+            className={`ui-character-image ${character === "default" || character === "blink" || character === "thinking" ? "active" : ""}`}
             priority
             unoptimized
           />
@@ -215,7 +226,7 @@ export function AppShell() {
             alt="생각하는 옐로 메이트"
             width={184}
             height={184}
-            className={`ui-character-image ${character === "thinking" ? "active" : ""}`}
+            className={`ui-character-image thinking-frame ${character === "thinking" ? "active" : ""}`}
             unoptimized
           />
           {/* 눈 감기 깜빡임 프레임 */}
@@ -224,7 +235,7 @@ export function AppShell() {
             alt="눈 감은 옐로 메이트"
             width={184}
             height={184}
-            className={`ui-character-image ${character === "blink" ? "active" : ""}`}
+            className={`ui-character-image blink-frame ${character === "blink" ? "active" : ""}`}
             unoptimized
           />
           {/* 이미지 3: 당황 표정 */}
