@@ -28,8 +28,11 @@ When retrieval cannot decide a single term but has valid candidates, the backend
 ```text
 event: suggestions
 data: {
+  "version": 1,
+  "status": "candidates",
   "index": 0,
   "query": "interest",
+  "count": 1,
   "suggestions": [
     {
       "term_id": 12,
@@ -61,3 +64,35 @@ event: done
 ```
 
 Suggestion text must not be embedded in `delta.text` or Markdown strings. Actual answer text is streamed only through `delta`; clickable candidates are sent only through `suggestions`.
+
+## Event Order
+
+Matched:
+
+```text
+answer_start
+delta
+answer_done
+done
+```
+
+Candidates:
+
+```text
+suggestions
+done
+```
+
+Not found:
+
+```text
+failure
+done
+```
+
+Retrieval or generation error:
+
+```text
+error
+done
+```

@@ -24,6 +24,14 @@ from app.services.retrieval import RetrievalResult, TermDocument
 DELTA_CHUNK_SIZE = 32
 MAX_SUGGESTIONS = 3
 
+EVENT_ANSWER_START = "answer_start"
+EVENT_DELTA = "delta"
+EVENT_ANSWER_DONE = "answer_done"
+EVENT_SUGGESTIONS = "suggestions"
+EVENT_FAILURE = "failure"
+EVENT_ERROR = "error"
+EVENT_DONE = "done"
+
 
 def sse(event: str, data: Any) -> str:
     payload = data.model_dump() if hasattr(data, "model_dump") else data
@@ -132,7 +140,7 @@ async def _stream_term(
     llm_client: LLMClient,
 ) -> AsyncIterator[str]:
     yield sse(
-        "answer_start",
+        EVENT_ANSWER_START,
         AnswerStartData(index=index, term=term.term_name, related_keywords=term.related_terms),
     )
     chunks: list[str] = []
@@ -147,29 +155,29 @@ async def _stream_term(
             chunks.append(chunk)
             for section, visible in section_streamer.feed(chunk):
                 for batched_section, text in delta_batcher.feed(section, visible):
-                    yield sse("delta", DeltaData(index=index, section=batched_section, text=text))
+                    yield sse(EVENT_DELTA, DeltaData(index=index, section=batched_section, text=text))
         for section, visible in section_streamer.finish():
             for batched_section, text in delta_batcher.feed(section, visible):
-                yield sse("delta", DeltaData(index=index, section=batched_section, text=text))
+                yield sse(EVENT_DELTA, DeltaData(index=index, section=batched_section, text=text))
         for section, text in delta_batcher.finish():
-            yield sse("delta", DeltaData(index=index, section=section, text=text))
+            yield sse(EVENT_DELTA, DeltaData(index=index, section=section, text=text))
         answer = _parse_answer(term.term_name, "".join(chunks), term.related_terms)
     except asyncio.CancelledError:
         raise
     except LLMTimeoutError:
-        yield sse("error", ErrorData(index=index, code="llm_timeout", message="\ub2f5\ubcc0 \uc0dd\uc131 \uc2dc\uac04\uc774 \ucd08\uacfc\ub418\uc5c8\uc2b5\ub2c8\ub2e4.", retryable=True))
+        yield sse(EVENT_ERROR, ErrorData(index=index, code="llm_timeout", message="\ub2f5\ubcc0 \uc0dd\uc131 \uc2dc\uac04\uc774 \ucd08\uacfc\ub418\uc5c8\uc2b5\ub2c8\ub2e4.", retryable=True))
         return
     except LLMError:
-        yield sse("error", ErrorData(index=index, code="llm_error", message="\ub2f5\ubcc0 \uc0dd\uc131 \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4.", retryable=True))
+        yield sse(EVENT_ERROR, ErrorData(index=index, code="llm_error", message="\ub2f5\ubcc0 \uc0dd\uc131 \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4.", retryable=True))
         return
     except ValueError:
-        yield sse("error", ErrorData(index=index, code="answer_generation_failed", message="\ub2f5\ubcc0 \ud615\uc2dd\uc774 \uc62c\ubc14\ub974\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4."))
+        yield sse(EVENT_ERROR, ErrorData(index=index, code="answer_generation_failed", message="\ub2f5\ubcc0 \ud615\uc2dd\uc774 \uc62c\ubc14\ub974\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4."))
         return
     except Exception:
-        yield sse("error", ErrorData(index=index, code="answer_generation_failed", message="\ub2f5\ubcc0 \uc0dd\uc131 \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4."))
+        yield sse(EVENT_ERROR, ErrorData(index=index, code="answer_generation_failed", message="\ub2f5\ubcc0 \uc0dd\uc131 \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4."))
         return
 
-    yield sse("answer_done", AnswerDoneData(index=index, answer=answer))
+    yield sse(EVENT_ANSWER_DONE, AnswerDoneData(index=index, answer=answer))
 
 
 def should_call_llm(result: RetrievalResult) -> bool:
@@ -211,7 +219,7 @@ async def stream_events(
             raise
         except Exception:
             errors.append(index)
-            yield sse("error", ErrorData(index=index, code="retrieval_failed", message="\uac80\uc0c9 \ucc98\ub9ac \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4."))
+            yield sse(EVENT_ERROR, ErrorData(index=index, code="retrieval_failed", message="\uac80\uc0c9 \ucc98\ub9ac \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4."))
             continue
 
         if should_call_llm(result):
@@ -223,7 +231,7 @@ async def stream_events(
                 llm_client=llm_client_factory(),
             ):
                 yield event
-                if event.startswith("event: error"):
+                if event.startswith(f"event: {EVENT_ERROR}"):
                     errors.append(index)
             if len(errors) == before_errors:
                 completed.append(index)
@@ -231,18 +239,20 @@ async def stream_events(
 
         if result.status == "candidates" and result.candidates:
             suggested = True
+            suggestions = build_suggestions(result.candidates)
             yield sse(
-                "suggestions",
+                EVENT_SUGGESTIONS,
                 SuggestionsData(
                     index=index,
                     query=term_text,
-                    suggestions=build_suggestions(result.candidates),
+                    count=len(suggestions),
+                    suggestions=suggestions,
                 ),
             )
             continue
 
         failed.append(index)
-        yield sse("failure", FailureData(index=index, term=term_text, reason="not_found", message="\uc77c\uce58\ud558\ub294 \uacbd\uc81c\uc6a9\uc5b4\ub97c \ucc3e\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4."))
+        yield sse(EVENT_FAILURE, FailureData(index=index, term=term_text, reason="not_found", message="\uc77c\uce58\ud558\ub294 \uacbd\uc81c\uc6a9\uc5b4\ub97c \ucc3e\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4."))
 
     if completed and (failed or errors):
         status = "partial"
@@ -254,4 +264,4 @@ async def stream_events(
         status = "suggestions"
     else:
         status = "failed"
-    yield sse("done", DoneData(status=status, completed_indices=completed, failed_indices=failed + errors))
+    yield sse(EVENT_DONE, DoneData(status=status, completed_indices=completed, failed_indices=failed + errors))

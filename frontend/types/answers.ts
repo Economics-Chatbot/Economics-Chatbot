@@ -68,8 +68,11 @@ export type Suggestion = {
 export type TermSuggestion = Suggestion;
 
 export type SuggestionsData = {
+  version: 1;
+  status: "candidates";
   index: number;
   query: string;
+  count: number;
   suggestions: Suggestion[];
 };
 

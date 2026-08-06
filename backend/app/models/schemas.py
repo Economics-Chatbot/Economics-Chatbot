@@ -53,8 +53,11 @@ class Suggestion(BaseModel):
 
 
 class SuggestionsData(BaseModel):
+    version: Literal[1] = 1
+    status: Literal["candidates"] = "candidates"
     index: int = Field(ge=0)
     query: str
+    count: int = Field(ge=0)
     suggestions: list[Suggestion]
 
 

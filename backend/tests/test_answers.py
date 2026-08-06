@@ -110,8 +110,11 @@ def test_suggestions_payload_is_structured_sse_and_not_markdown(monkeypatch) -> 
     assert [name for name, _ in parsed] == ["suggestions", "done"]
     suggestions = parsed[0][1]
     assert suggestions == {
+        "version": 1,
+        "status": "candidates",
         "index": 0,
         "query": "interest",
+        "count": 2,
         "suggestions": [
             {"term_id": 2, "term": "interest futures", "query": "interest futures", "reason": None},
             {"term_id": 3, "term": "interest swap", "query": "interest swap", "reason": None},
@@ -228,6 +231,35 @@ def test_not_found_with_candidates_still_emits_failure(monkeypatch) -> None:
 def test_selected_term_id_payload_is_rejected() -> None:
     response = client.post("/api/answers", json={"query": "interest", "selected_term_id": 1})
     assert response.status_code == 422
+
+
+def test_done_event_is_sent_for_all_non_cancelled_branches(monkeypatch) -> None:
+    scenarios = [
+        ("matched", lambda query: matched(query)),
+        ("candidates", lambda query: RetrievalResult(status="candidates", candidates=[TermDocument(2, "candidate", "official")])),
+        ("not_found", lambda query: RetrievalResult(status="not_found")),
+        ("retrieval_error", lambda query: (_ for _ in ()).throw(RuntimeError("boom"))),
+    ]
+
+    for _, retrieve_fn in scenarios:
+        monkeypatch.setattr(answers_route, "retrieve", retrieve_fn)
+        use_factory(monkeypatch, lambda: FakeLLM())
+        parsed = parse_events(client.post("/api/answers", json={"query": "interest"}).text)
+        assert parsed[-1][0] == "done"
+
+
+def test_llm_factory_is_not_called_for_candidates_or_not_found(monkeypatch) -> None:
+    def factory():
+        raise AssertionError("LLM factory must not be called")
+
+    for result in [
+        RetrievalResult(status="candidates", candidates=[TermDocument(2, "candidate", "official")]),
+        RetrievalResult(status="not_found"),
+    ]:
+        monkeypatch.setattr(answers_route, "retrieve", lambda query, result=result: result)
+        use_factory(monkeypatch, factory)
+        parsed = parse_events(client.post("/api/answers", json={"query": "interest"}).text)
+        assert parsed[-1][0] == "done"
 
 
 def test_timeout_and_llm_error_are_safe(monkeypatch) -> None:
