@@ -54,6 +54,20 @@ def test_matched_answer_stream(monkeypatch) -> None:
     assert [name for name, _ in parsed][0] == "answer_start"
     assert [name for name, _ in parsed][-2:] == ["answer_done", "done"]
     assert "delta" in [name for name, _ in parsed]
+    assert [data["section"] for name, data in parsed if name == "delta"] == [
+        "one_line_definition",
+        "easy_explanation",
+        "example",
+    ]
+    assert parsed[-2][1]["answer"] == {
+        "term": "인플레이션",
+        "one_line_definition": "공식 정의입니다.",
+        "easy_explanation": "쉽게 설명합니다.",
+        "example": "생활 속 예시입니다.",
+        "related_keywords": ["물가"],
+        "sources": [{"title": "한국은행 경제금융용어 800선", "url": None}],
+    }
+    assert parsed[0][1]["related_keywords"] == ["물가"]
     assert parsed[-1][1]["status"] == "completed"
 
 
@@ -63,6 +77,11 @@ def test_sse_delimiters_split_across_provider_chunks(monkeypatch) -> None:
     parsed = parse_events(client.post("/api/answers", json={"query": "인플레이션"}).text)
     delta_text = "".join(data["text"] for name, data in parsed if name == "delta")
     assert delta_text == "정의쉬운예시"
+    assert [data["section"] for name, data in parsed if name == "delta"] == [
+        "one_line_definition",
+        "easy_explanation",
+        "example",
+    ]
 
 
 def test_candidates_do_not_call_llm(monkeypatch) -> None:

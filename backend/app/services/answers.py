@@ -49,34 +49,51 @@ def _parse_answer(term: str, text: str, related_keywords: list[str]) -> Answer:
     )
 
 
-class _DelimiterStripper:
-    markers = ("\n<<<EASY>>>", "\n<<<EXAMPLE>>>")
+class _SectionStreamer:
+    markers = (
+        ("\n<<<EASY>>>", "easy_explanation"),
+        ("\n<<<EXAMPLE>>>", "example"),
+    )
 
     def __init__(self) -> None:
         self.pending = ""
+        self.section = "one_line_definition"
 
-    def feed(self, chunk: str) -> str:
+    def feed(self, chunk: str) -> list[tuple[str, str]]:
         self.pending += chunk
-        return self._flush_complete()
+        return self._flush_complete(False)
 
-    def finish(self) -> str:
+    def finish(self) -> list[tuple[str, str]]:
         visible = self.pending
         self.pending = ""
-        for marker in self.markers:
-            visible = visible.replace(marker, "")
-        return visible
+        return [(self.section, visible)] if visible else []
 
-    def _flush_complete(self) -> str:
-        visible = self.pending
-        for marker in self.markers:
-            visible = visible.replace(marker, "")
-        keep = 0
-        for marker in self.markers:
-            for size in range(1, min(len(marker), len(visible)) + 1):
-                if visible.endswith(marker[:size]):
-                    keep = max(keep, size)
-        self.pending = visible[-keep:] if keep else ""
-        return visible[:-keep] if keep else visible
+    def _flush_complete(self, final: bool) -> list[tuple[str, str]]:
+        result: list[tuple[str, str]] = []
+        while True:
+            matches = [(self.pending.find(marker), marker, section) for marker, section in self.markers]
+            matches = [match for match in matches if match[0] >= 0]
+            if matches:
+                position, marker, section = min(matches, key=lambda item: item[0])
+                if position:
+                    result.append((self.section, self.pending[:position]))
+                self.pending = self.pending[position + len(marker):]
+                self.section = section
+                continue
+            if final:
+                if self.pending:
+                    result.append((self.section, self.pending))
+                    self.pending = ""
+                return result
+            keep = 0
+            for marker, _ in self.markers:
+                for size in range(1, min(len(marker), len(self.pending)) + 1):
+                    if self.pending.endswith(marker[:size]):
+                        keep = max(keep, size)
+            if len(self.pending) > keep:
+                result.append((self.section, self.pending[:-keep] if keep else self.pending))
+                self.pending = self.pending[-keep:] if keep else ""
+            return result
 
 
 async def _stream_term(
@@ -86,9 +103,12 @@ async def _stream_term(
     term: TermDocument,
     llm_client: LLMClient,
 ) -> AsyncIterator[str]:
-    yield sse("answer_start", AnswerStartData(index=index, term=term.term_name))
+    yield sse(
+        "answer_start",
+        AnswerStartData(index=index, term=term.term_name, related_keywords=term.related_terms),
+    )
     chunks: list[str] = []
-    delimiter_stripper = _DelimiterStripper()
+    section_streamer = _SectionStreamer()
     try:
         retrieval_result = RetrievalResult(status="matched", terms=[term])
         async for chunk in llm_client.stream_answer(
@@ -96,12 +116,12 @@ async def _stream_term(
             retrieval_result=retrieval_result,
         ):
             chunks.append(chunk)
-            visible = delimiter_stripper.feed(chunk)
+            for section, visible in section_streamer.feed(chunk):
+                if visible:
+                    yield sse("delta", DeltaData(index=index, section=section, text=visible))
+        for section, visible in section_streamer.finish():
             if visible:
-                yield sse("delta", DeltaData(index=index, text=visible))
-        visible = delimiter_stripper.finish()
-        if visible:
-            yield sse("delta", DeltaData(index=index, text=visible))
+                yield sse("delta", DeltaData(index=index, section=section, text=visible))
         answer = _parse_answer(term.term_name, "".join(chunks), term.related_terms)
     except asyncio.CancelledError:
         raise
