@@ -352,6 +352,8 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  z-index: 20;
+  pointer-events: auto;
 }
 
 /* 메인 타이틀 CHUNK_HOME_INTRO */
@@ -390,6 +392,8 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  z-index: 21;
+  pointer-events: auto;
 }
 
 .ui-section-title-left {
@@ -418,6 +422,9 @@ html, body {
   align-items: center;
   gap: 12px;
   cursor: pointer;
+  position: relative;
+  z-index: 22;
+  pointer-events: auto;
   transition: all 150ms ease;
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
 }
@@ -514,11 +521,13 @@ html, body {
   position: relative;
   z-index: 10;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 220ms ease-out 120ms;
 }
 
 .app:not([data-screen="home-idle"]):not([data-screen="home-typing"]) .result-only {
   opacity: 1;
+  pointer-events: auto;
 }
 
 /* 사용자 질문 말풍선: 캐릭터 발밑 우측 (top: 180px, right: 20px) -> 겹침 0%! */
