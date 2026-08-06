@@ -354,8 +354,6 @@ export function AppShell() {
             <ErrorCard
               title="관련 용어를 찾지 못했어요."
               description={failureMsg || "용어 이름이나 약어를 조금 더 정확하게 입력해 주세요."}
-              actionLabel="다시 질문하기"
-              onAction={() => setScreen("home-typing")}
             />
           )}
 
