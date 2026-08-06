@@ -13,7 +13,7 @@ import { RelatedKeywordChip } from "@/components/RelatedKeywordChip";
 import { MessageList } from "@/components/MessageList";
 import { AnswerMessage, type AnswerMessageData } from "@/components/AnswerMessage";
 import { LoadingCard } from "@/components/LoadingCard";
-import { streamAnswers } from "@/lib/answers";
+import { AnswerNetworkError, streamAnswers } from "@/lib/answers";
 
 type ChatMessage =
   | { id: string; type: "user"; text: string }
@@ -199,7 +199,7 @@ export function AppShell() {
       }, controller.signal);
     } catch (error) {
       if (controller.signal.aborted) return;
-      setErrorMsg(error instanceof Error ? error.message : "네트워크 오류가 발생했어요.");
+      setErrorMsg(error instanceof AnswerNetworkError ? error.message : "답변 요청을 처리하지 못했어요.");
       setScreen("error");
       setCharacter("error");
     } finally {
@@ -216,6 +216,14 @@ export function AppShell() {
     setUserQueryBubble("");
     setChatMessages([]);
     setSuggestions([]);
+  };
+
+  const handleCancel = () => {
+    clearRequestTimers();
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setScreen("answer-done");
+    setCharacter("default");
   };
 
   return (
@@ -375,7 +383,8 @@ export function AppShell() {
       {/* 하단 DOCK 입력창 */}
       <ChatInput
         value={query}
-        disabled={["query-transition", "searching"].includes(screen)}
+        disabled={["query-transition", "searching", "answer-streaming"].includes(screen)}
+        onCancel={handleCancel}
         onChange={setQuery}
         onFocus={() => {
           if (screen === "home-idle") setScreen("home-typing");

@@ -1,5 +1,4 @@
 import type {
-  AnswerCard,
   AnswerDoneData,
   AnswerEventName,
   AnswerStreamEvent,
@@ -10,6 +9,20 @@ import type {
   FailureData,
   SuggestionsData,
 } from "../types/answers";
+
+export class AnswerNetworkError extends Error {
+  constructor() {
+    super("네트워크 오류가 발생했어요.");
+    this.name = "AnswerNetworkError";
+  }
+}
+
+export class AnswerResponseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AnswerResponseError";
+  }
+}
 
 export type StreamHandlers = {
   onAnswerStart: (data: AnswerStartData) => void;
@@ -49,21 +62,27 @@ export async function streamAnswers(
   handlers: StreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"}/api/answers`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query }),
-      signal,
-    },
-  );
-  if (!response.ok) throw new Error(`답변 요청 실패 (${response.status})`);
+  let response: Response;
+  try {
+    response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"}/api/answers`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+        signal,
+      },
+    );
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new AnswerNetworkError();
+  }
+  if (!response.ok) throw new AnswerResponseError(`답변 요청 실패 (${response.status})`);
   const contentType = response.headers.get("content-type")?.split(";", 1)[0].trim();
   if (contentType !== "text/event-stream") {
-    throw new Error("스트리밍 응답 형식이 아닙니다.");
+    throw new AnswerResponseError("스트리밍 응답 형식이 아닙니다.");
   }
-  if (!response.body) throw new Error("스트리밍 응답을 읽을 수 없습니다.");
+  if (!response.body) throw new AnswerResponseError("스트리밍 응답을 읽을 수 없습니다.");
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -81,7 +100,14 @@ export async function streamAnswers(
   };
 
   while (true) {
-    const { value, done } = await reader.read();
+    let result: ReadableStreamReadResult<Uint8Array>;
+    try {
+      result = await reader.read();
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      throw new AnswerNetworkError();
+    }
+    const { value, done } = result;
     buffer += decoder.decode(value, { stream: !done });
     const parsed = parseSseBuffer(buffer);
     buffer = parsed.remainder;
