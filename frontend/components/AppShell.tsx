@@ -2,33 +2,8 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-
-export type ScreenState =
-  | "home-idle"
-  | "home-typing"
-  | "query-transition"
-  | "searching"
-  | "answer-streaming"
-  | "answer-done"
-  | "suggestions"
-  | "failure"
-  | "error";
-
-export type CharacterState = "default" | "blink" | "thinking" | "error";
-
-export interface RetrievedTerm {
-  term_id: number;
-  term_name: string;
-  official_definition: string;
-  related_terms: string[];
-}
-
-export interface TermSuggestion {
-  term_id: number;
-  term_name: string;
-  similarity: number;
-  related_terms: string[];
-}
+import type { RetrievedTerm, TermSuggestion, RetrievalResult } from "@/types/answers";
+import type { CharacterState, ScreenState } from "@/types/ui";
 
 const MOTION = {
   closeEyesMs: 90,
@@ -214,7 +189,7 @@ export function AppShell() {
         throw new Error(`HTTP ${res.status} error`);
       }
 
-      const data = await res.json();
+      const data: RetrievalResult = await res.json();
 
       if (data.term) {
         data.term.related_terms = normalizeRelatedTerms(data.term.related_terms);
