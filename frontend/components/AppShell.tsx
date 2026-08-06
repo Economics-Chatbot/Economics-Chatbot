@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { ArrowLeft, ChartNoAxesColumnIncreasing, CircleHelp, PieChart } from "lucide-react";
-import type { Answer, AnswerDoneData, AnswerSection, AnswerStartData, DeltaData, TermSuggestion } from "@/types/answers";
+import type { Answer, AnswerDoneData, AnswerSection, AnswerStartData, DeltaData, Suggestion } from "@/types/answers";
 import type { CharacterState, ScreenState } from "@/types/ui";
 import { ChatInput } from "@/components/ChatInput";
 import { SuggestedQuestions, type SuggestedQuestion } from "@/components/SuggestedQuestions";
@@ -55,7 +55,7 @@ export function AppShell() {
   const [query, setQuery] = useState("");
   const [userQueryBubble, setUserQueryBubble] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [suggestions, setSuggestions] = useState<TermSuggestion[]>([]);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [failureMsg, setFailureMsg] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string>("");
   
@@ -178,9 +178,9 @@ export function AppShell() {
         onSuggestions: (data) => {
           setSuggestions(data.suggestions.map((suggestion, index) => ({
             term_id: index,
-            term_name: suggestion.term,
-            similarity: 0,
-            related_terms: [],
+            term: suggestion.term,
+            query: data.query,
+            reason: suggestion.reason,
           })));
           setScreen("suggestions");
         },
@@ -340,9 +340,9 @@ export function AppShell() {
                   <RelatedKeywordChip
                     key={item.term_id}
                     variant="candidate"
-                    onClick={() => void submitQuestion(item.term_name)}
+                    onClick={() => void submitQuestion(item.term)}
                   >
-                    {item.term_name}
+                    {item.term}
                   </RelatedKeywordChip>
                 ))}
               </div>

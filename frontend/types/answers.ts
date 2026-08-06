@@ -18,6 +18,14 @@ export type AnswerEventName =
   | "done";
 
 export type Source = { title: string; url?: string | null };
+export type AnswerSection = "one_line_definition" | "easy_explanation" | "example";
+
+export interface RetrievedTerm {
+  term_id: number;
+  term_name: string;
+  official_definition: string;
+  related_terms: string[];
+}
 
 export type Answer = {
   term: string;
@@ -52,7 +60,7 @@ export type AnswerStartData = {
 
 export type DeltaData = {
   index: number;
-  section: "one_line_definition" | "easy_explanation" | "example";
+  section: AnswerSection;
   text: string;
 };
 
