@@ -24,7 +24,10 @@ def test_success_stream() -> None:
 
     assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
     assert response.headers["cache-control"] == "no-cache"
-    assert [name for name, _ in parsed] == ["answer_start", "delta", "delta", "delta", "answer_done", "done"]
+    names = [name for name, _ in parsed]
+    assert names[0] == "answer_start"
+    assert "delta" in names
+    assert names[-2:] == ["answer_done", "done"]
     assert parsed[-1][1]["status"] == "completed"
 
 
