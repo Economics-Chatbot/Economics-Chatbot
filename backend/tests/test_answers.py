@@ -179,6 +179,57 @@ def test_failure_without_candidates_does_not_call_llm(monkeypatch) -> None:
     assert not called
 
 
+def test_retrieval_exception_returns_sse_error_event(monkeypatch) -> None:
+    called = False
+
+    def factory():
+        nonlocal called
+        called = True
+        return FakeLLM()
+
+    def raise_retrieval_error(query: str) -> RetrievalResult:
+        raise RuntimeError("database://secret")
+
+    monkeypatch.setattr(answers_route, "retrieve", raise_retrieval_error)
+    use_factory(monkeypatch, factory)
+    response = client.post("/api/answers", json={"query": "interest"})
+    parsed = parse_events(response.text)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
+    assert [name for name, _ in parsed] == ["error", "done"]
+    assert parsed[0][1]["code"] == "retrieval_failed"
+    assert "secret" not in json.dumps(parsed[0][1])
+    assert parsed[-1][1]["status"] == "error"
+    assert not called
+
+
+def test_not_found_with_candidates_still_emits_failure(monkeypatch) -> None:
+    called = False
+
+    def factory():
+        nonlocal called
+        called = True
+        return FakeLLM()
+
+    monkeypatch.setattr(answers_route, "retrieve", lambda query: RetrievalResult(
+        status="not_found",
+        candidates=[TermDocument(2, "low score candidate", "official", similarity=0.1)],
+    ))
+    use_factory(monkeypatch, factory)
+    parsed = parse_events(client.post("/api/answers", json={"query": "low score"}).text)
+
+    assert [name for name, _ in parsed] == ["failure", "done"]
+    assert parsed[-1][1]["status"] == "failed"
+    assert all(name != "suggestions" for name, _ in parsed)
+    assert not called
+
+
+def test_selected_term_id_payload_is_rejected() -> None:
+    response = client.post("/api/answers", json={"query": "interest", "selected_term_id": 1})
+    assert response.status_code == 422
+
+
 def test_timeout_and_llm_error_are_safe(monkeypatch) -> None:
     for exception, code in [(LLMTimeoutError(), "llm_timeout"), (LLMError("secret"), "llm_error")]:
         monkeypatch.setattr(answers_route, "retrieve", lambda query: matched(query))

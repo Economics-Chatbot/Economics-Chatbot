@@ -11,6 +11,8 @@ AnswerSection = Literal["one_line_definition", "easy_explanation", "example"]
 class AnswerRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2_000)
 
+    model_config = {"extra": "forbid"}
+
 
 class Source(BaseModel):
     title: str

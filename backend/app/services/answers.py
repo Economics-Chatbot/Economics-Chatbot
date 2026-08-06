@@ -229,7 +229,7 @@ async def stream_events(
                 completed.append(index)
             continue
 
-        if result.candidates:
+        if result.status == "candidates" and result.candidates:
             suggested = True
             yield sse(
                 "suggestions",
