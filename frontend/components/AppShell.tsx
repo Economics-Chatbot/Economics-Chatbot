@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { ArrowLeft, ChartNoAxesColumnIncreasing, CircleHelp, PieChart } from "lucide-react";
-import type { TermSuggestion } from "@/types/answers";
+import type { Answer, AnswerDoneData, AnswerSection, AnswerStartData, DeltaData, Suggestion } from "@/types/answers";
 import type { CharacterState, ScreenState } from "@/types/ui";
 import { ChatInput } from "@/components/ChatInput";
 import { SuggestedQuestions, type SuggestedQuestion } from "@/components/SuggestedQuestions";
@@ -13,11 +13,17 @@ import { RelatedKeywordChip } from "@/components/RelatedKeywordChip";
 import { MessageList } from "@/components/MessageList";
 import { AnswerMessage, type AnswerMessageData } from "@/components/AnswerMessage";
 import { LoadingCard } from "@/components/LoadingCard";
-import { MOCK_ANSWER, MOCK_ANSWER_CHUNKS } from "@/lib/mock-answer";
+import { AnswerNetworkError, streamAnswers } from "@/lib/answers";
 
 type ChatMessage =
   | { id: string; type: "user"; text: string }
   | { id: string; type: "answer"; data: AnswerMessageData };
+
+const EMPTY_SECTIONS: Record<AnswerSection, string> = {
+  one_line_definition: "",
+  easy_explanation: "",
+  example: "",
+};
 
 const MOTION = {
   closeEyesMs: 90,
@@ -49,11 +55,12 @@ export function AppShell() {
   const [query, setQuery] = useState("");
   const [userQueryBubble, setUserQueryBubble] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [suggestions, setSuggestions] = useState<TermSuggestion[]>([]);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [failureMsg, setFailureMsg] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string>("");
   
   const requestTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const characterLayout = screen === "home-idle" || screen === "home-typing" ? "home" : "result";
 
@@ -87,6 +94,7 @@ export function AppShell() {
 
   useEffect(() => () => {
     clearRequestTimers();
+    abortControllerRef.current?.abort();
   }, []);
 
   const handleSuggestionClick = (suggestionText: string) => {
@@ -99,6 +107,9 @@ export function AppShell() {
     if (["query-transition", "searching", "answer-streaming"].includes(screen)) return;
 
     clearRequestTimers();
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     setUserQueryBubble(trimmedQuery);
     setQuery("");
@@ -111,62 +122,109 @@ export function AppShell() {
     setFailureMsg("");
     setErrorMsg("");
 
-    setScreen("query-transition");
-    setCharacter("default");
+    setScreen("searching");
+    setCharacter("thinking");
 
-    requestTimersRef.current.push(
-      setTimeout(() => {
-        setScreen("searching");
-        setCharacter("thinking"); // 이미지 2 (위 쳐다보는 생각 표정)
-      }, MOTION.thinkingStartMs)
-    );
+    const updateAnswer = (index: number, update: (data: AnswerMessageData) => AnswerMessageData) => {
+      const cardId = `${answerId}-${index}`;
+      setChatMessages((current) => current.map((message) => (
+        message.type === "answer" && message.id === cardId
+          ? { ...message, data: update(message.data) }
+          : message
+      )));
+    };
 
-    const answerStartDelay = MOTION.thinkingStartMs + 520;
-    requestTimersRef.current.push(
-      setTimeout(() => {
-        if (trimmedQuery.includes("오류")) {
-          setErrorMsg("답변을 생성하는 중 문제가 발생했어요.");
+    try {
+      await streamAnswers(trimmedQuery, {
+        onAnswerStart: (data: AnswerStartData) => {
+          setChatMessages((current) => [
+            ...current,
+            {
+              id: `${answerId}-${data.index}`,
+              type: "answer",
+              data: {
+                id: `${answerId}-${data.index}`,
+                index: data.index,
+                term: data.term,
+                relatedKeywords: data.related_keywords,
+                sections: { ...EMPTY_SECTIONS },
+              },
+            },
+          ]);
+          setScreen("answer-streaming");
+        },
+        onDelta: (data: DeltaData) => {
+          updateAnswer(data.index, (current) => ({
+            ...current,
+            sections: {
+              ...current.sections,
+              [data.section]: current.sections[data.section] + data.text,
+            },
+          }));
+        },
+        onAnswerDone: (data: AnswerDoneData) => {
+          updateAnswer(data.index, (current) => ({
+            ...current,
+            term: data.answer.term,
+            relatedKeywords: data.answer.related_keywords,
+            answer: data.answer,
+            sections: {
+              one_line_definition: data.answer.one_line_definition,
+              easy_explanation: data.answer.easy_explanation,
+              example: data.answer.example,
+            },
+          }));
+        },
+        onSuggestions: (data) => {
+          setSuggestions(data.suggestions.map((suggestion, index) => ({
+            term_id: index,
+            term: suggestion.term,
+            query: data.query,
+            reason: suggestion.reason,
+          })));
+          setScreen("suggestions");
+        },
+        onFailure: (data) => {
+          setFailureMsg(data.message);
+          setScreen("failure");
+        },
+        onError: (data) => {
+          setErrorMsg(data.message);
           setScreen("error");
           setCharacter("error");
-          return;
-        }
-
-        setChatMessages((current) => [
-          ...current,
-          { id: answerId, type: "answer", data: { id: answerId, term: MOCK_ANSWER, content: "" } },
-        ]);
-        setScreen("answer-streaming");
-        setCharacter("thinking");
-
-        MOCK_ANSWER_CHUNKS.forEach((chunk, index) => {
-          requestTimersRef.current.push(
-            setTimeout(() => {
-              setChatMessages((current) => current.map((message) => {
-                if (message.type !== "answer" || message.id !== answerId) return message;
-                return {
-                  ...message,
-                  data: { ...message.data, content: message.data.content + chunk },
-                };
-              }));
-              if (index === MOCK_ANSWER_CHUNKS.length - 1) {
-                setScreen("answer-done");
-                setCharacter("default");
-              }
-            }, index * 620),
-          );
-        });
-      }, answerStartDelay),
-    );
-
+        },
+        onDone: (data) => {
+          setScreen(data.status === "error" ? "error" : data.status === "failed" ? "failure" : data.status === "suggestions" ? "suggestions" : "answer-done");
+          setCharacter(data.status === "error" ? "error" : "default");
+        },
+      }, controller.signal);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setErrorMsg(error instanceof AnswerNetworkError ? error.message : "답변 요청을 처리하지 못했어요.");
+      setScreen("error");
+      setCharacter("error");
+    } finally {
+      if (abortControllerRef.current === controller) abortControllerRef.current = null;
+    }
   };
 
   const handleBack = () => {
     clearRequestTimers();
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
     setScreen("home-idle");
     setCharacter("default");
     setUserQueryBubble("");
     setChatMessages([]);
     setSuggestions([]);
+  };
+
+  const handleCancel = () => {
+    clearRequestTimers();
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setScreen("answer-done");
+    setCharacter("default");
   };
 
   return (
@@ -184,16 +242,6 @@ export function AppShell() {
           </button>
         )}
         <div className="ui-header-brand">EconomyMate</div>
-        <div className="ui-header-jelly-button" title="옐로 메이트">
-          <Image
-            src="/assets/character-default.png"
-            alt="노란 젤리 메이트"
-            width={32}
-            height={32}
-            className="ui-header-jelly-img"
-            unoptimized
-          />
-        </div>
       </header>
 
       {/* 캐릭터 스테이지 & 3D 장식들 */}
@@ -252,23 +300,21 @@ export function AppShell() {
 
       {/* 시작 화면 전용 */}
       <div className="home-only">
-        <div className="home-content-wrapper">
-          <div className="chunk-home-intro">
-            <h1 className="type-home-title">
-              {"궁금한 경제용어,\n편하게 물어보세요"}
-            </h1>
-          </div>
-
-          <div className="chunk-home-guide">어려운 경제를 쉽고 친근하게 설명해드릴게요.</div>
-
-          <SuggestedQuestions items={HOME_SUGGESTIONS} onSelect={handleSuggestionClick} />
+        <div className="chunk-home-intro">
+          <h1 className="type-home-title">
+            {"궁금한 경제용어,\n편하게 물어보세요"}
+          </h1>
         </div>
+
+        <div className="chunk-home-guide">어려운 경제를 쉽고 친근하게 설명해드릴게요.</div>
+
+        <SuggestedQuestions items={HOME_SUGGESTIONS} onSelect={handleSuggestionClick} />
       </div>
 
       {/* 모든 질문 결과 화면 (성공, 후보, 실패, 에러 포함) */}
       <div className="result-only">
         <MessageList
-          scrollKey={`${screen}:${chatMessages.map((message) => message.id + (message.type === "answer" ? message.data.content : message.text)).join("|")}:${suggestions.length}`}
+          scrollKey={`${screen}:${chatMessages.map((message) => message.id + (message.type === "answer" ? JSON.stringify(message.data.sections) : message.text)).join("|")}:${suggestions.length}`}
         >
           {chatMessages.map((message) => message.type === "user" ? (
             <UserMessage key={message.id}>{message.text}</UserMessage>
@@ -294,7 +340,7 @@ export function AppShell() {
                   <RelatedKeywordChip
                     key={item.term_id}
                     variant="candidate"
-                    onClick={() => void submitQuestion(item.query)}
+                    onClick={() => void submitQuestion(item.term)}
                   >
                     {item.term}
                   </RelatedKeywordChip>
@@ -307,9 +353,7 @@ export function AppShell() {
           {screen === "failure" && (
             <ErrorCard
               title="관련 용어를 찾지 못했어요."
-              description="용어 이름이나 약어를 조금 더 정확하게 입력해 주세요."
-              actionLabel="다시 질문하기"
-              onAction={() => setScreen("home-typing")}
+              description={failureMsg || "용어 이름이나 약어를 조금 더 정확하게 입력해 주세요."}
             />
           )}
 
@@ -326,7 +370,8 @@ export function AppShell() {
       {/* 하단 DOCK 입력창 */}
       <ChatInput
         value={query}
-        disabled={["query-transition", "searching"].includes(screen)}
+        disabled={["query-transition", "searching", "answer-streaming"].includes(screen)}
+        onCancel={handleCancel}
         onChange={setQuery}
         onFocus={() => {
           if (screen === "home-idle") setScreen("home-typing");

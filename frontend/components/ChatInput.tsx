@@ -1,7 +1,7 @@
 "use client";
 
 import type { ChangeEvent, FormEvent, KeyboardEvent } from "react";
-import { Send } from "lucide-react";
+import { Send, X } from "lucide-react";
 
 type ChatInputProps = {
   value: string;
@@ -9,6 +9,7 @@ type ChatInputProps = {
   onChange: (value: string) => void;
   onFocus?: () => void;
   onSubmit: () => void;
+  onCancel?: () => void;
 };
 
 export function ChatInput({
@@ -17,6 +18,7 @@ export function ChatInput({
   onChange,
   onFocus,
   onSubmit,
+  onCancel,
 }: ChatInputProps) {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -42,14 +44,15 @@ export function ChatInput({
         onChange={(event: ChangeEvent<HTMLTextAreaElement>) => onChange(event.target.value)}
         onKeyDown={handleKeyDown}
       />
-      <button
-        className="ui-send-button"
-        type="submit"
-        disabled={disabled || !value.trim()}
-        aria-label="질문 보내기"
-      >
-        <Send size={20} strokeWidth={2.5} aria-hidden="true" />
-      </button>
+      {disabled && onCancel ? (
+        <button className="ui-send-button" type="button" onClick={onCancel} aria-label="답변 생성 취소">
+          <X size={20} strokeWidth={2.5} aria-hidden="true" />
+        </button>
+      ) : (
+        <button className="ui-send-button" type="submit" disabled={!value.trim()} aria-label="질문 보내기">
+          <Send size={20} strokeWidth={2.5} aria-hidden="true" />
+        </button>
+      )}
     </form>
   );
 }
