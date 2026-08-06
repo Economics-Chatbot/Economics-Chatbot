@@ -62,14 +62,31 @@ export async function streamAnswers(
   handlers: StreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
+  return streamAnswerRequest("/api/answers", { query }, handlers, signal);
+}
+
+export async function streamTermAnswer(
+  termName: string,
+  handlers: StreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  return streamAnswerRequest("/api/answers/term", { term_name: termName }, handlers, signal);
+}
+
+async function streamAnswerRequest(
+  path: string,
+  body: Record<string, string>,
+  handlers: StreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
   let response: Response;
   try {
     response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"}/api/answers`,
+      `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"}${path}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify(body),
         signal,
       },
     );
