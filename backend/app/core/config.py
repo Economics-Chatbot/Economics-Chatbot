@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     openai_chat_model: str = Field(default="gpt-4.1-mini", alias="OPENAI_CHAT_MODEL")
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
     supabase_service_role_key: str = Field(default="", alias="SUPABASE_SERVICE_ROLE_KEY")
-    supabase_anon_key: str = Field(default="", alias="SUPABASE_ANON_KEY")
 
     model_config = SettingsConfigDict(env_file=(".env", "../.env"), extra="ignore")
 
