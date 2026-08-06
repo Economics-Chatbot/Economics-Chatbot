@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 DoneStatus = Literal["completed", "partial", "suggestions", "failed", "error"]
 FailureReason = Literal["not_found", "low_quality", "not_economic"]
+AnswerSection = Literal["one_line_definition", "easy_explanation", "example"]
 
 
 class AnswerRequest(BaseModel):
@@ -28,10 +29,12 @@ class Answer(BaseModel):
 class AnswerStartData(BaseModel):
     index: int = Field(ge=0)
     term: str
+    related_keywords: list[str] = Field(default_factory=list)
 
 
 class DeltaData(BaseModel):
     index: int = Field(ge=0)
+    section: AnswerSection
     text: str
 
 
