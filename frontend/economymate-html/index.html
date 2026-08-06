@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>EconomyMate</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy: #173b67;
+      --blue: #3278c6;
+      --blue-text: #245c93;
+      --blue-pale: #f3f8ff;
+      --blue-border: #bbd8f4;
+      --body-muted: #52677f;
+      --placeholder: #8c9bad;
+      --line: #d7e2ee;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --viewport-height: 100dvh;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      background: #eef4fa;
+      color: var(--navy);
+      font-family: Pretendard, "Noto Sans KR", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, textarea { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+
+    .app {
+      position: relative;
+      width: min(100%, 390px);
+      height: var(--viewport-height);
+      min-height: 640px;
+      margin: 0 auto;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .brand {
+      position: absolute;
+      z-index: 5;
+      top: 24px;
+      left: 24px;
+      width: calc(100% - 48px);
+      height: 38px;
+      margin: 0;
+      color: var(--navy);
+      font-family: Fredoka, "Arial Rounded MT Bold", sans-serif;
+      font-size: 30px;
+      font-weight: 700;
+      line-height: 38px;
+      letter-spacing: -0.6px;
+      text-align: center;
+    }
+
+    .home-view {
+      position: absolute;
+      inset: 0;
+      opacity: 1;
+      transition: opacity 180ms ease;
+    }
+
+    .intro {
+      position: absolute;
+      top: 78px;
+      left: 30px;
+      width: calc(100% - 60px);
+      margin: 0;
+      color: var(--navy);
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 31px;
+      letter-spacing: -0.44px;
+      text-align: center;
+    }
+
+    .character-stage {
+      position: absolute;
+      top: 148px;
+      left: 54px;
+      width: calc(100% - 108px);
+      height: 218px;
+      pointer-events: none;
+    }
+
+    .character-frame {
+      position: absolute;
+      top: 17px;
+      left: 50%;
+      width: 184px;
+      height: 184px;
+      transform: translateX(-50%);
+    }
+
+    .character {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center;
+      opacity: 1;
+      transition: opacity 180ms ease;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    .character.is-changing { opacity: 0; }
+
+    .dot {
+      position: absolute;
+      border-radius: 50%;
+    }
+
+    .dot.mint {
+      top: 51px;
+      left: 8px;
+      width: 35px;
+      height: 35px;
+      background: #72dcc8;
+    }
+
+    .dot.orange {
+      right: 12px;
+      bottom: 43px;
+      width: 29px;
+      height: 29px;
+      background: #ffaa62;
+    }
+
+    .question-mark {
+      position: absolute;
+      top: 55px;
+      right: 22px;
+      width: 44px;
+      height: 54px;
+      color: #397fcf;
+      font-family: Fredoka, sans-serif;
+      font-size: 58px;
+      font-weight: 700;
+      line-height: 54px;
+      text-align: center;
+      text-shadow: 2px 3px 0 #1f5f9e, 4px 6px 8px rgba(31, 95, 158, 0.2);
+      transform: rotate(-45deg);
+      transform-origin: center;
+    }
+
+    .guide {
+      position: absolute;
+      top: 374px;
+      left: 24px;
+      width: calc(100% - 48px);
+      margin: 0;
+      color: var(--body-muted);
+      font-size: 15px;
+      font-weight: 500;
+      line-height: 24px;
+      letter-spacing: -0.2px;
+      text-align: center;
+    }
+
+    .suggestions {
+      position: absolute;
+      top: 410px;
+      left: 24px;
+      width: calc(100% - 48px);
+      height: 224px;
+    }
+
+    .suggestions h2 {
+      height: 24px;
+      margin: 0 0 10px;
+      font-size: 17px;
+      font-weight: 700;
+      line-height: 24px;
+      letter-spacing: -0.3px;
+    }
+
+    .suggestion-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .suggestion {
+      width: 100%;
+      height: 52px;
+      padding: 0 18px;
+      border: 1px solid var(--blue-border);
+      border-radius: 18px;
+      background: var(--blue-pale);
+      box-shadow: 0 3px 10px rgba(36, 92, 147, 0.08);
+      color: var(--blue-text);
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 22px;
+      letter-spacing: -0.2px;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .suggestion:active { background: #e8f2fe; }
+    .suggestion:focus-visible { outline: 3px solid rgba(50, 120, 198, 0.26); outline-offset: 2px; }
+
+    .chat-view {
+      position: absolute;
+      inset: 0;
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 180ms ease;
+    }
+
+    .app.is-chat .home-view { visibility: hidden; opacity: 0; }
+    .app.is-chat .chat-view { visibility: visible; opacity: 1; }
+    .app.is-chat .brand { top: 20px; height: 34px; font-size: 24px; line-height: 34px; }
+
+    .chat-character-frame {
+      position: absolute;
+      top: 66px;
+      left: 50%;
+      width: 140px;
+      height: 140px;
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+
+    .chat-character-frame .character { width: 132px; height: 132px; inset: 4px; }
+
+    .messages {
+      position: absolute;
+      top: 214px;
+      right: 20px;
+      bottom: calc(82px + var(--safe-bottom));
+      left: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-x: hidden;
+      overflow-y: auto;
+      padding: 0 0 12px;
+      scroll-behavior: smooth;
+      overscroll-behavior: contain;
+      scrollbar-width: none;
+    }
+
+    .messages::-webkit-scrollbar { display: none; }
+
+    .message-row { display: flex; width: 100%; }
+    .message-row.user { justify-content: flex-end; }
+    .message-row.ai { justify-content: flex-start; }
+
+    .bubble {
+      width: fit-content;
+      min-height: 44px;
+      margin: 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-size: 15px;
+      line-height: 23px;
+    }
+
+    .user .bubble {
+      max-width: 78%;
+      padding: 11px 15px;
+      border-radius: 18px 18px 5px 18px;
+      background: var(--blue);
+      color: #fff;
+      font-weight: 500;
+    }
+
+    .ai .bubble {
+      max-width: 84%;
+      padding: 12px 15px;
+      border: 1px solid #c9dff3;
+      border-radius: 18px 18px 18px 5px;
+      background: var(--blue-pale);
+      color: var(--navy);
+      font-weight: 400;
+    }
+
+    .typing {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 20px;
+    }
+
+    .typing i {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #6f91b5;
+      animation: typing 1.05s infinite ease-in-out;
+    }
+
+    .typing i:nth-child(2) { animation-delay: 0.14s; }
+    .typing i:nth-child(3) { animation-delay: 0.28s; }
+
+    @keyframes typing {
+      0%, 65%, 100% { transform: translateY(0); opacity: 0.45; }
+      32% { transform: translateY(-3px); opacity: 1; }
+    }
+
+    .input-shell {
+      position: fixed;
+      z-index: 20;
+      left: 50%;
+      bottom: max(16px, var(--safe-bottom));
+      display: flex;
+      align-items: center;
+      width: min(calc(100% - 32px), 358px);
+      height: 58px;
+      padding: 0 6px 0 20px;
+      border: 1px solid var(--line);
+      border-radius: 29px;
+      background: #fff;
+      box-shadow: 0 6px 20px rgba(23, 59, 103, 0.12);
+      transform: translateX(-50%);
+    }
+
+    #question-input {
+      flex: 1;
+      min-width: 0;
+      height: 42px;
+      max-height: 42px;
+      margin: 0;
+      padding: 10px 10px 10px 0;
+      resize: none;
+      overflow: hidden;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--navy);
+      font-size: 15px;
+      font-weight: 400;
+      line-height: 22px;
+    }
+
+    #question-input::placeholder { color: var(--placeholder); opacity: 1; }
+
+    .send-button {
+      display: grid;
+      flex: 0 0 46px;
+      place-items: center;
+      width: 46px;
+      height: 46px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: var(--blue);
+      color: #fff;
+      opacity: 0.45;
+      cursor: default;
+      transition: opacity 120ms ease, background 120ms ease;
+    }
+
+    .send-button.is-active { opacity: 1; cursor: pointer; }
+    .send-button:disabled { cursor: default; }
+    .send-button:focus-visible { outline: 3px solid rgba(50, 120, 198, 0.26); outline-offset: 2px; }
+    .send-button svg { width: 20px; height: 20px; }
+
+    @media (max-height: 720px) {
+      .intro { top: 68px; font-size: 20px; line-height: 28px; }
+      .character-stage { top: 126px; height: 184px; }
+      .character-frame { width: 156px; height: 156px; }
+      .guide { top: 310px; }
+      .suggestions { top: 344px; }
+      .suggestion { height: 48px; }
+      .suggestion-list { gap: 8px; }
+      .app.is-chat .chat-character-frame { top: 55px; width: 116px; height: 116px; }
+      .app.is-chat .chat-character-frame .character { width: 110px; height: 110px; inset: 3px; }
+      .messages { top: 177px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app" id="app">
+    <h1 class="brand">EconomyMate</h1>
+
+    <section class="home-view" aria-label="시작 화면">
+      <p class="intro">어려운 경제용어,<br />이코노미메이트와 함께라면 어렵지 않아요!</p>
+
+      <div class="character-stage" aria-hidden="true">
+        <span class="dot mint"></span>
+        <div class="character-frame">
+          <img class="character" id="home-character" src="assets/character-default.png" alt="" />
+        </div>
+        <span class="question-mark">?</span>
+        <span class="dot orange"></span>
+      </div>
+
+      <p class="guide">쉽고 친근하게 설명드릴게요.</p>
+
+      <section class="suggestions" aria-labelledby="suggestion-title">
+        <h2 id="suggestion-title">이런 질문은 어때요?</h2>
+        <div class="suggestion-list">
+          <button class="suggestion" type="button">기준금리가 뭐야?</button>
+          <button class="suggestion" type="button">환율이 오르면 왜 물가도 올라?</button>
+          <button class="suggestion" type="button">인플레이션이 뭐야?</button>
+        </div>
+      </section>
+    </section>
+
+    <section class="chat-view" aria-label="채팅 화면">
+      <div class="chat-character-frame" aria-hidden="true">
+        <img class="character" id="chat-character" src="assets/character-default.png" alt="" />
+      </div>
+      <div class="messages" id="messages" role="log" aria-live="polite" aria-relevant="additions"></div>
+    </section>
+
+    <form class="input-shell" id="question-form">
+      <textarea id="question-input" rows="1" maxlength="300" placeholder="경제용어를 물어보세요" aria-label="경제용어 질문"></textarea>
+      <button class="send-button" id="send-button" type="submit" disabled aria-label="질문 보내기">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 19V5M6.5 10.5 12 5l5.5 5.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </button>
+    </form>
+  </main>
+
+  <script>
+    (() => {
+      const ASSETS = {
+        default: "assets/character-default.png",
+        curious: "assets/character-curious.png",
+        thinking: "assets/character-thinking.png",
+        complete: "assets/character-complete.png"
+      };
+
+      const DEMO_ANSWERS = {
+        "기준금리가 뭐야?": "기준금리는 한국은행이 정하는 ‘돈의 기본 가격’이에요. 기준금리가 오르면 대출이자가 오르고 소비와 투자가 줄어 물가를 낮추는 데 도움을 줄 수 있어요.",
+        "환율이 오르면 왜 물가도 올라?": "환율이 오른다는 것은 같은 달러를 사는 데 더 많은 원화가 필요하다는 뜻이에요. 원유나 원재료처럼 해외에서 들여오는 물건의 원화 가격이 비싸져 국내 물가도 오를 수 있어요.",
+        "인플레이션이 뭐야?": "인플레이션은 여러 상품과 서비스의 가격이 전반적으로 계속 오르는 현상이에요. 같은 돈으로 살 수 있는 양이 줄어들기 때문에 돈의 실질 가치가 낮아졌다고 표현해요."
+      };
+
+      const app = document.getElementById("app");
+      const form = document.getElementById("question-form");
+      const input = document.getElementById("question-input");
+      const sendButton = document.getElementById("send-button");
+      const messages = document.getElementById("messages");
+      const characters = [document.getElementById("home-character"), document.getElementById("chat-character")];
+      const suggestions = document.querySelectorAll(".suggestion");
+      let isLoading = false;
+      let characterTimer;
+
+      Object.values(ASSETS).forEach((src) => { const image = new Image(); image.src = src; });
+
+      function setCharacter(state) {
+        clearTimeout(characterTimer);
+        characters.forEach((character) => character.classList.add("is-changing"));
+        characterTimer = window.setTimeout(() => {
+          characters.forEach((character) => {
+            character.src = ASSETS[state];
+            character.classList.remove("is-changing");
+          });
+        }, 90);
+      }
+
+      function updateSendButton() {
+        const enabled = input.value.trim().length > 0 && !isLoading;
+        sendButton.disabled = !enabled;
+        sendButton.classList.toggle("is-active", enabled);
+      }
+
+      function addMessage(role, content, loading = false) {
+        const row = document.createElement("div");
+        row.className = `message-row ${role}`;
+        const bubble = document.createElement("p");
+        bubble.className = "bubble";
+        if (loading) {
+          bubble.setAttribute("aria-label", "답변 작성 중");
+          bubble.innerHTML = '<span class="typing" aria-hidden="true"><i></i><i></i><i></i></span>';
+        } else {
+          bubble.textContent = content;
+        }
+        row.appendChild(bubble);
+        messages.appendChild(row);
+        messages.scrollTop = messages.scrollHeight;
+        return row;
+      }
+
+      function getDemoAnswer(question) {
+        return DEMO_ANSWERS[question] || `“${question}”에 대한 질문을 확인했어요. 현재 화면은 UI 데모이므로 실제 경제용어 답변 API를 연결하면 이 위치에 검색 결과와 쉬운 설명이 표시됩니다.`;
+      }
+
+      async function sendQuestion(question) {
+        isLoading = true;
+        updateSendButton();
+        app.classList.add("is-chat");
+        addMessage("user", question);
+        input.value = "";
+        setCharacter("thinking");
+        const loadingRow = addMessage("ai", "", true);
+
+        // 실제 백엔드 연결 시 아래 대기·데모 응답을 fetch 호출로 교체하세요.
+        await new Promise((resolve) => window.setTimeout(resolve, 1050));
+        loadingRow.remove();
+        addMessage("ai", getDemoAnswer(question));
+        setCharacter("complete");
+
+        window.setTimeout(() => setCharacter("default"), 1200);
+        isLoading = false;
+        updateSendButton();
+        input.focus({ preventScroll: true });
+      }
+
+      suggestions.forEach((button) => {
+        button.addEventListener("click", () => {
+          input.value = button.textContent.trim();
+          updateSendButton();
+          setCharacter("curious");
+          input.focus({ preventScroll: true });
+        });
+      });
+
+      input.addEventListener("focus", () => {
+        if (!isLoading && !app.classList.contains("is-chat")) setCharacter("curious");
+      });
+
+      input.addEventListener("input", () => {
+        updateSendButton();
+        if (!isLoading && !app.classList.contains("is-chat")) setCharacter(input.value ? "curious" : "default");
+      });
+
+      input.addEventListener("blur", () => {
+        if (!isLoading && !input.value.trim() && !app.classList.contains("is-chat")) setCharacter("default");
+      });
+
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+          event.preventDefault();
+          if (!sendButton.disabled) form.requestSubmit();
+        }
+      });
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const question = input.value.trim();
+        if (!question || isLoading) return;
+        sendQuestion(question);
+      });
+
+      function syncViewportHeight() {
+        const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        document.documentElement.style.setProperty("--viewport-height", `${height}px`);
+        messages.scrollTop = messages.scrollHeight;
+      }
+
+      window.visualViewport?.addEventListener("resize", syncViewportHeight);
+      window.addEventListener("resize", syncViewportHeight);
+      syncViewportHeight();
+      updateSendButton();
+    })();
+  </script>
+</body>
+</html>
