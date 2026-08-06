@@ -9,7 +9,10 @@ AnswerSection = Literal["one_line_definition", "easy_explanation", "example"]
 
 
 class AnswerRequest(BaseModel):
-    query: str = Field(min_length=1, max_length=2_000)
+    query: str | None = Field(default=None, min_length=1, max_length=2_000)
+    selected_term_id: int | None = Field(default=None, ge=1)
+
+    model_config = {"extra": "forbid"}
 
 
 class Source(BaseModel):
@@ -74,3 +77,21 @@ class DoneData(BaseModel):
     completed_indices: list[int] = Field(default_factory=list)
     failed_indices: list[int] = Field(default_factory=list)
     message: str | None = None
+
+
+class CandidateItem(BaseModel):
+    rank: int = Field(ge=1)
+    term_id: int
+    term_name: str
+    similarity: float | None = None
+
+
+class CandidateResponse(BaseModel):
+    status: Literal["candidates"] = "candidates"
+    message: str
+    candidates: list[CandidateItem]
+
+
+class NotFoundResponse(BaseModel):
+    status: Literal["not_found"] = "not_found"
+    message: str

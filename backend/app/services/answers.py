@@ -10,10 +10,13 @@ from app.models.schemas import (
     Answer,
     AnswerDoneData,
     AnswerStartData,
+    CandidateItem,
+    CandidateResponse,
     DeltaData,
     DoneData,
     ErrorData,
     FailureData,
+    NotFoundResponse,
     Source,
     Suggestion,
     SuggestionsData,
@@ -22,6 +25,9 @@ from app.services.llm import LLMClient, LLMError, LLMTimeoutError
 from app.services.retrieval import RetrievalResult, TermDocument
 
 DELTA_CHUNK_SIZE = 32
+MAX_CANDIDATES = 3
+CANDIDATE_MESSAGE = "\uc544\ub798 \uc6a9\uc5b4 \uc911 \ucc3e\uc73c\uc2dc\ub294 \uac83\uc744 \uc120\ud0dd\ud574\uc8fc\uc138\uc694."
+NOT_FOUND_MESSAGE = "\uac80\uc0c9 \uacb0\uacfc\uac00 \uc5c6\uc2b5\ub2c8\ub2e4."
 
 
 def sse(event: str, data: Any) -> str:
@@ -171,6 +177,68 @@ async def _stream_term(
     yield sse("answer_done", AnswerDoneData(index=index, answer=answer))
 
 
+def should_call_llm(result: RetrievalResult) -> bool:
+    return result.status == "matched" and bool(result.terms) and bool(result.terms[0].official_definition)
+
+
+def sorted_candidate_terms(candidates: list[TermDocument]) -> list[TermDocument]:
+    return sorted(
+        candidates,
+        key=lambda term: term.similarity if term.similarity is not None else -1.0,
+        reverse=True,
+    )[:MAX_CANDIDATES]
+
+
+def build_candidate_response(candidates: list[TermDocument]) -> CandidateResponse:
+    return CandidateResponse(
+        message=CANDIDATE_MESSAGE,
+        candidates=[
+            CandidateItem(
+                rank=index,
+                term_id=term.term_id,
+                term_name=term.term_name,
+                similarity=term.similarity,
+            )
+            for index, term in enumerate(sorted_candidate_terms(candidates), start=1)
+        ],
+    )
+
+
+def build_not_found_response() -> NotFoundResponse:
+    return NotFoundResponse(message=NOT_FOUND_MESSAGE)
+
+
+async def stream_answer_events(
+    *,
+    query: str,
+    terms: list[TermDocument],
+    llm_client_factory: Callable[[], LLMClient],
+) -> AsyncIterator[str]:
+    completed: list[int] = []
+    errors: list[int] = []
+    for index, term in enumerate(terms):
+        before_errors = len(errors)
+        async for event in _stream_term(
+            query=query,
+            index=index,
+            term=term,
+            llm_client=llm_client_factory(),
+        ):
+            yield event
+            if event.startswith("event: error"):
+                errors.append(index)
+        if len(errors) == before_errors:
+            completed.append(index)
+
+    if completed and errors:
+        status = "partial"
+    elif completed:
+        status = "completed"
+    else:
+        status = "error"
+    yield sse("done", DoneData(status=status, completed_indices=completed, failed_indices=errors))
+
+
 async def stream_events(
     query: str,
     retrieve_fn: Callable[..., RetrievalResult],
@@ -192,29 +260,29 @@ async def stream_events(
             yield sse("error", ErrorData(index=index, code="retrieval_failed", message="검색 처리 중 오류가 발생했습니다."))
             continue
 
-        if result.status == "candidates":
+        if should_call_llm(result):
+            before_errors = len(errors)
+            async for event in _stream_term(
+                query=query,
+                index=index,
+                term=result.terms[0],
+                llm_client=llm_client_factory(),
+            ):
+                yield event
+                if event.startswith("event: error"):
+                    errors.append(index)
+            if len(errors) == before_errors:
+                completed.append(index)
+            continue
+
+        if result.candidates:
             suggested = True
-            suggestions = [Suggestion(term=item.term_name) for item in result.candidates]
+            suggestions = [Suggestion(term=item.term_name) for item in sorted_candidate_terms(result.candidates)]
             yield sse("suggestions", SuggestionsData(index=index, term=term_text, suggestions=suggestions))
             continue
 
-        if result.status != "matched" or not result.terms or not result.terms[0].official_definition:
-            failed.append(index)
-            yield sse("failure", FailureData(index=index, term=term_text, reason="not_found", message="일치하는 경제용어를 찾지 못했습니다."))
-            continue
-
-        before_errors = len(errors)
-        async for event in _stream_term(
-            query=query,
-            index=index,
-            term=result.terms[0],
-            llm_client=llm_client_factory(),
-        ):
-            yield event
-            if event.startswith("event: error"):
-                errors.append(index)
-        if len(errors) == before_errors:
-            completed.append(index)
+        failed.append(index)
+        yield sse("failure", FailureData(index=index, term=term_text, reason="not_found", message="\uc77c\uce58\ud558\ub294 \uacbd\uc81c\uc6a9\uc5b4\ub97c \ucc3e\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4."))
 
     if completed and (failed or errors):
         status = "partial"

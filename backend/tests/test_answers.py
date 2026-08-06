@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import json
 
 from fastapi.testclient import TestClient
@@ -27,13 +27,13 @@ def parse_events(text: str) -> list[tuple[str, dict]]:
 def matched(term: str) -> RetrievalResult:
     return RetrievalResult(
         status="matched",
-        terms=[TermDocument(1, term, f"{term}의 공식 정의입니다.", ["물가"])],
+        terms=[TermDocument(1, term, f"{term} official definition", ["price"])],
     )
 
 
 class FakeLLM(LLMClient):
     def __init__(self, chunks: list[str] | None = None, error: Exception | None = None):
-        self.chunks = chunks or ["공식 정의입니다.", "\n<<<EASY>>>", "쉽게 설명합니다.", "\n<<<EXAMPLE>>>", "생활 속 예시입니다."]
+        self.chunks = chunks or ["official definition", "\n<<<EASY>>>", "easy explanation", "\n<<<EXAMPLE>>>", "daily example"]
         self.error = error
 
     async def stream_answer(self, *, user_query: str, retrieval_result: RetrievalResult):
@@ -46,7 +46,7 @@ class FakeLLM(LLMClient):
 def test_matched_answer_stream(monkeypatch) -> None:
     monkeypatch.setattr(answers_route, "retrieve", lambda query: matched(query))
     use_factory(monkeypatch, lambda: FakeLLM())
-    response = client.post("/api/answers", json={"query": "인플레이션"})
+    response = client.post("/api/answers", json={"query": "inflation"})
     parsed = parse_events(response.text)
 
     assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
@@ -60,23 +60,23 @@ def test_matched_answer_stream(monkeypatch) -> None:
         "example",
     ]
     assert parsed[-2][1]["answer"] == {
-        "term": "인플레이션",
-        "one_line_definition": "공식 정의입니다.",
-        "easy_explanation": "쉽게 설명합니다.",
-        "example": "생활 속 예시입니다.",
-        "related_keywords": ["물가"],
+        "term": "inflation",
+        "one_line_definition": "official definition",
+        "easy_explanation": "easy explanation",
+        "example": "daily example",
+        "related_keywords": ["price"],
         "sources": [{"title": "한국은행 경제금융용어 800선", "url": None}],
     }
-    assert parsed[0][1]["related_keywords"] == ["물가"]
+    assert parsed[0][1]["related_keywords"] == ["price"]
     assert parsed[-1][1]["status"] == "completed"
 
 
 def test_sse_delimiters_split_across_provider_chunks(monkeypatch) -> None:
     monkeypatch.setattr(answers_route, "retrieve", lambda query: matched(query))
-    use_factory(monkeypatch, lambda: FakeLLM(["정의", "\n<<<", "EASY>>>쉬운", "\n<<<EX", "AMPLE>>>예시"]))
-    parsed = parse_events(client.post("/api/answers", json={"query": "인플레이션"}).text)
+    use_factory(monkeypatch, lambda: FakeLLM(["definition", "\n<<<", "EASY>>>easy", "\n<<<EX", "AMPLE>>>example"]))
+    parsed = parse_events(client.post("/api/answers", json={"query": "inflation"}).text)
     delta_text = "".join(data["text"] for name, data in parsed if name == "delta")
-    assert delta_text == "정의쉬운예시"
+    assert delta_text == "definitioneasyexample"
     assert [data["section"] for name, data in parsed if name == "delta"] == [
         "one_line_definition",
         "easy_explanation",
@@ -84,7 +84,7 @@ def test_sse_delimiters_split_across_provider_chunks(monkeypatch) -> None:
     ]
 
 
-def test_candidates_do_not_call_llm(monkeypatch) -> None:
+def test_candidates_return_json_and_do_not_call_llm(monkeypatch) -> None:
     called = False
 
     def factory():
@@ -94,28 +94,52 @@ def test_candidates_do_not_call_llm(monkeypatch) -> None:
 
     monkeypatch.setattr(answers_route, "retrieve", lambda query: RetrievalResult(
         status="candidates",
-        candidates=[TermDocument(2, "인플레이션", "공식 정의")],
+        candidates=[
+            TermDocument(2, "inflation", "official", similarity=0.61),
+            TermDocument(3, "deflation", "official", similarity=0.59),
+        ],
     ))
     use_factory(monkeypatch, factory)
-    parsed = parse_events(client.post("/api/answers", json={"query": "물가상승"}).text)
+    response = client.post("/api/answers", json={"query": "prices"})
 
-    assert [name for name, _ in parsed] == ["suggestions", "done"]
-    assert parsed[-1][1]["status"] == "suggestions"
+    assert response.headers["content-type"] == "application/json"
+    assert response.json()["status"] == "candidates"
+    assert response.json()["candidates"] == [
+        {"rank": 1, "term_id": 2, "term_name": "inflation", "similarity": 0.61},
+        {"rank": 2, "term_id": 3, "term_name": "deflation", "similarity": 0.59},
+    ]
     assert not called
 
 
-def test_not_found(monkeypatch) -> None:
+def test_candidates_are_limited_to_top3_and_sorted(monkeypatch) -> None:
+    monkeypatch.setattr(answers_route, "retrieve", lambda query: RetrievalResult(
+        status="candidates",
+        candidates=[
+            TermDocument(4, "fourth", None, similarity=0.1),
+            TermDocument(1, "first", None, similarity=0.9),
+            TermDocument(3, "third", None, similarity=0.3),
+            TermDocument(2, "second", None, similarity=0.6),
+        ],
+    ))
+    response = client.post("/api/answers", json={"query": "ambiguous"})
+
+    assert [item["term_name"] for item in response.json()["candidates"]] == ["first", "second", "third"]
+    assert [item["rank"] for item in response.json()["candidates"]] == [1, 2, 3]
+
+
+def test_not_found_returns_json(monkeypatch) -> None:
     monkeypatch.setattr(answers_route, "retrieve", lambda query: RetrievalResult(status="not_found"))
-    parsed = parse_events(client.post("/api/answers", json={"query": "없는용어"}).text)
-    assert [name for name, _ in parsed] == ["failure", "done"]
-    assert parsed[-1][1]["status"] == "failed"
+    response = client.post("/api/answers", json={"query": "unknown"})
+    assert response.headers["content-type"] == "application/json"
+    assert response.json()["status"] == "not_found"
+    assert response.json()["message"]
 
 
 def test_timeout_and_llm_error_are_safe(monkeypatch) -> None:
     for exception, code in [(LLMTimeoutError(), "llm_timeout"), (LLMError("secret"), "llm_error")]:
         monkeypatch.setattr(answers_route, "retrieve", lambda query: matched(query))
         use_factory(monkeypatch, lambda exception=exception: FakeLLM(error=exception))
-        parsed = parse_events(client.post("/api/answers", json={"query": "인플레이션"}).text)
+        parsed = parse_events(client.post("/api/answers", json={"query": "inflation"}).text)
         assert parsed[-2][0] == "error"
         assert parsed[-2][1]["code"] == code
         assert "secret" not in json.dumps(parsed[-2][1])
@@ -124,20 +148,32 @@ def test_timeout_and_llm_error_are_safe(monkeypatch) -> None:
 
 def test_invalid_model_output_returns_generation_error(monkeypatch) -> None:
     monkeypatch.setattr(answers_route, "retrieve", lambda query: matched(query))
-    use_factory(monkeypatch, lambda: FakeLLM(["잘못된 출력"]))
-    parsed = parse_events(client.post("/api/answers", json={"query": "인플레이션"}).text)
+    use_factory(monkeypatch, lambda: FakeLLM(["bad output"] ))
+    parsed = parse_events(client.post("/api/answers", json={"query": "inflation"}).text)
     assert parsed[-2][0] == "error"
     assert parsed[-2][1]["code"] == "answer_generation_failed"
 
 
-def test_multiple_terms_preserve_indices_on_partial_success(monkeypatch) -> None:
-    monkeypatch.setattr(answers_route, "retrieve", lambda query: matched(query) if query == "첫용어" else RetrievalResult(status="not_found"))
+def test_selected_term_id_skips_retrieval_and_streams(monkeypatch) -> None:
+    monkeypatch.setattr(answers_route, "retrieve", lambda query: (_ for _ in ()).throw(AssertionError("no retrieval")))
+    monkeypatch.setattr(answers_route, "fetch_term_by_id", lambda term_id: TermDocument(7, "selected", "selected definition", ["related"]))
     use_factory(monkeypatch, lambda: FakeLLM())
-    parsed = parse_events(client.post("/api/answers", json={"query": "첫용어, 둘째용어"}).text)
-    indexed = [(name, data["index"]) for name, data in parsed if "index" in data]
-    assert indexed[0][1] == 0
-    assert indexed[-1][1] == 1
-    assert parsed[-1][1]["status"] == "partial"
+    parsed = parse_events(client.post("/api/answers", json={"selected_term_id": 7}).text)
+    assert [name for name, _ in parsed][0] == "answer_start"
+    assert parsed[0][1]["term"] == "selected"
+    assert parsed[-1][1]["status"] == "completed"
+
+
+def test_invalid_selected_term_id_returns_404(monkeypatch) -> None:
+    monkeypatch.setattr(answers_route, "fetch_term_by_id", lambda term_id: None)
+    response = client.post("/api/answers", json={"selected_term_id": 999})
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Invalid candidate"
+
+
+def test_selected_term_name_is_rejected() -> None:
+    response = client.post("/api/answers", json={"selected_term": "inflation"})
+    assert response.status_code == 422
 
 
 def test_client_cancellation_propagates() -> None:
@@ -161,5 +197,6 @@ def test_client_cancellation_propagates() -> None:
 async def _stream_for_test(llm: LLMClient):
     from app.services.answers import stream_events
 
-    async for event in stream_events("인플레이션", lambda query: matched(query), lambda: llm):
+    async for event in stream_events("inflation", lambda query: matched(query), lambda: llm):
         yield event
+
