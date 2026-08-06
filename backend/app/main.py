@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes.answers import router as answers_router
 from app.api.routes.health import router as health_router
 from app.api.routes.retrieval import router as retrieval_router
 
@@ -17,3 +18,4 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(retrieval_router)
+app.include_router(answers_router)
