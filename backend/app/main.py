@@ -16,4 +16,5 @@ app.add_middleware(
 
 
 app.include_router(health_router)
+app.include_router(answers_router)
 app.include_router(retrieval_router)
