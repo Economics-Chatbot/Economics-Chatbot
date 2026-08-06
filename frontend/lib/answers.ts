@@ -58,7 +58,12 @@ export async function streamAnswers(
       signal,
     },
   );
-  if (!response.ok || !response.body) throw new Error(`답변 요청 실패 (${response.status})`);
+  if (!response.ok) throw new Error(`답변 요청 실패 (${response.status})`);
+  const contentType = response.headers.get("content-type")?.split(";", 1)[0].trim();
+  if (contentType !== "text/event-stream") {
+    throw new Error("스트리밍 응답 형식이 아닙니다.");
+  }
+  if (!response.body) throw new Error("스트리밍 응답을 읽을 수 없습니다.");
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();

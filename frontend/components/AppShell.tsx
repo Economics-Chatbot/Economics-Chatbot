@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { ArrowLeft, ChartNoAxesColumnIncreasing, CircleHelp, PieChart } from "lucide-react";
-import type { TermSuggestion } from "@/types/answers";
+import type { Answer, AnswerDoneData, AnswerStartData, DeltaData, TermSuggestion } from "@/types/answers";
 import type { CharacterState, ScreenState } from "@/types/ui";
 import { ChatInput } from "@/components/ChatInput";
 import { SuggestedQuestions, type SuggestedQuestion } from "@/components/SuggestedQuestions";
@@ -13,7 +13,7 @@ import { RelatedKeywordChip } from "@/components/RelatedKeywordChip";
 import { MessageList } from "@/components/MessageList";
 import { AnswerMessage, type AnswerMessageData } from "@/components/AnswerMessage";
 import { LoadingCard } from "@/components/LoadingCard";
-import { MOCK_ANSWER, MOCK_ANSWER_CHUNKS } from "@/lib/mock-answer";
+import { streamAnswers } from "@/lib/answers";
 
 type ChatMessage =
   | { id: string; type: "user"; text: string }
@@ -54,6 +54,7 @@ export function AppShell() {
   const [errorMsg, setErrorMsg] = useState<string>("");
   
   const requestTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const characterLayout = screen === "home-idle" || screen === "home-typing" ? "home" : "result";
 
@@ -87,6 +88,7 @@ export function AppShell() {
 
   useEffect(() => () => {
     clearRequestTimers();
+    abortControllerRef.current?.abort();
   }, []);
 
   const handleSuggestionClick = (suggestionText: string) => {
@@ -99,6 +101,9 @@ export function AppShell() {
     if (["query-transition", "searching", "answer-streaming"].includes(screen)) return;
 
     clearRequestTimers();
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     setUserQueryBubble(trimmedQuery);
     setQuery("");
@@ -111,57 +116,92 @@ export function AppShell() {
     setFailureMsg("");
     setErrorMsg("");
 
-    setScreen("query-transition");
-    setCharacter("default");
+    setScreen("searching");
+    setCharacter("thinking");
 
-    requestTimersRef.current.push(
-      setTimeout(() => {
-        setScreen("searching");
-        setCharacter("thinking"); // 이미지 2 (위 쳐다보는 생각 표정)
-      }, MOTION.thinkingStartMs)
-    );
+    const termFromAnswer = (answer: Answer) => ({
+      term_id: 0,
+      term_name: answer.term,
+      official_definition: answer.one_line_definition,
+      related_terms: answer.related_keywords,
+    });
+    const updateAnswer = (update: (data: AnswerMessageData) => AnswerMessageData) => {
+      setChatMessages((current) => current.map((message) => (
+        message.type === "answer" && message.id === answerId
+          ? { ...message, data: update(message.data) }
+          : message
+      )));
+    };
 
-    const answerStartDelay = MOTION.thinkingStartMs + 520;
-    requestTimersRef.current.push(
-      setTimeout(() => {
-        if (trimmedQuery.includes("오류")) {
-          setErrorMsg("답변을 생성하는 중 문제가 발생했어요.");
+    try {
+      await streamAnswers(trimmedQuery, {
+        onAnswerStart: (data: AnswerStartData) => {
+          setChatMessages((current) => [
+            ...current,
+            {
+              id: answerId,
+              type: "answer",
+              data: {
+                id: answerId,
+                term: {
+                  term_id: data.index,
+                  term_name: data.term,
+                  official_definition: "",
+                  related_terms: data.related_keywords,
+                },
+                content: "",
+              },
+            },
+          ]);
+          setScreen("answer-streaming");
+        },
+        onDelta: (data: DeltaData) => {
+          updateAnswer((current) => ({ ...current, content: current.content + data.text }));
+        },
+        onAnswerDone: (data: AnswerDoneData) => {
+          updateAnswer((current) => ({
+            ...current,
+            term: termFromAnswer(data.answer),
+            content: data.answer.easy_explanation,
+          }));
+        },
+        onSuggestions: (data) => {
+          setSuggestions(data.suggestions.map((suggestion, index) => ({
+            term_id: index,
+            term_name: suggestion.term,
+            similarity: 0,
+            related_terms: [],
+          })));
+          setScreen("suggestions");
+        },
+        onFailure: (data) => {
+          setFailureMsg(data.message);
+          setScreen("failure");
+        },
+        onError: (data) => {
+          setErrorMsg(data.message);
           setScreen("error");
           setCharacter("error");
-          return;
-        }
-
-        setChatMessages((current) => [
-          ...current,
-          { id: answerId, type: "answer", data: { id: answerId, term: MOCK_ANSWER, content: "" } },
-        ]);
-        setScreen("answer-streaming");
-        setCharacter("thinking");
-
-        MOCK_ANSWER_CHUNKS.forEach((chunk, index) => {
-          requestTimersRef.current.push(
-            setTimeout(() => {
-              setChatMessages((current) => current.map((message) => {
-                if (message.type !== "answer" || message.id !== answerId) return message;
-                return {
-                  ...message,
-                  data: { ...message.data, content: message.data.content + chunk },
-                };
-              }));
-              if (index === MOCK_ANSWER_CHUNKS.length - 1) {
-                setScreen("answer-done");
-                setCharacter("default");
-              }
-            }, index * 620),
-          );
-        });
-      }, answerStartDelay),
-    );
-
+        },
+        onDone: (data) => {
+          setScreen(data.status === "error" ? "error" : data.status === "failed" ? "failure" : data.status === "suggestions" ? "suggestions" : "answer-done");
+          setCharacter(data.status === "error" ? "error" : "default");
+        },
+      }, controller.signal);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setErrorMsg(error instanceof Error ? error.message : "네트워크 오류가 발생했어요.");
+      setScreen("error");
+      setCharacter("error");
+    } finally {
+      if (abortControllerRef.current === controller) abortControllerRef.current = null;
+    }
   };
 
   const handleBack = () => {
     clearRequestTimers();
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
     setScreen("home-idle");
     setCharacter("default");
     setUserQueryBubble("");
