@@ -38,6 +38,7 @@ data: {
       "term_id": 12,
       "term": "interest futures",
       "query": "interest futures",
+      "summary": "A simple one-line summary.",
       "reason": null
     }
   ]
@@ -96,3 +97,7 @@ Retrieval or generation error:
 error
 done
 ```
+
+## Candidate Summary
+
+Each suggestion includes `summary`, a one-sentence LLM-generated explanation derived from the term's official definition. The official definition remains reserved for final chat answer generation and is not rendered directly in the search result card. Summaries are cached by `term_id` in memory to avoid repeated generation for the same term during the server process lifetime.

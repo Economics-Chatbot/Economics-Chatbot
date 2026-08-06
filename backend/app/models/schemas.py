@@ -49,6 +49,7 @@ class Suggestion(BaseModel):
     term_id: int
     term: str
     query: str
+    summary: str
     reason: str | None = None
 
 

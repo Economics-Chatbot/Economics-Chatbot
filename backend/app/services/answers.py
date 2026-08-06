@@ -23,6 +23,7 @@ from app.services.retrieval import RetrievalResult, TermDocument
 
 DELTA_CHUNK_SIZE = 32
 MAX_SUGGESTIONS = 3
+SUMMARY_CACHE: dict[int, str] = {}
 
 EVENT_ANSWER_START = "answer_start"
 EVENT_DELTA = "delta"
@@ -184,21 +185,58 @@ def should_call_llm(result: RetrievalResult) -> bool:
     return result.status == "matched" and bool(result.terms) and bool(result.terms[0].official_definition)
 
 
-def build_suggestions(candidates: list[TermDocument]) -> list[Suggestion]:
-    sorted_candidates = sorted(
+def sorted_candidate_terms(candidates: list[TermDocument]) -> list[TermDocument]:
+    return sorted(
         candidates,
         key=lambda term: term.similarity if term.similarity is not None else -1.0,
         reverse=True,
     )[:MAX_SUGGESTIONS]
-    return [
-        Suggestion(
-            term_id=term.term_id,
-            term=term.term_name,
-            query=term.term_name,
-            reason=None,
+
+
+def fallback_summary(term: TermDocument) -> str:
+    definition = (term.official_definition or "").strip()
+    if not definition:
+        return f"{term.term_name}? ?? ?????????."
+    first_sentence = definition.split(".", 1)[0].strip()
+    if len(first_sentence) > 40:
+        first_sentence = first_sentence[:37].rstrip() + "..."
+    return first_sentence if first_sentence.endswith("???") or first_sentence.endswith("???.") else f"{first_sentence}???."
+
+
+async def summarize_term(term: TermDocument, llm_client_factory: Callable[[], LLMClient]) -> str:
+    cached = SUMMARY_CACHE.get(term.term_id)
+    if cached is not None:
+        return cached
+
+    try:
+        summary = await llm_client_factory().summarize_term(
+            term_name=term.term_name,
+            official_definition=term.official_definition or "",
         )
-        for term in sorted_candidates
-    ]
+    except Exception:
+        summary = fallback_summary(term)
+
+    summary = summary.strip() or fallback_summary(term)
+    SUMMARY_CACHE[term.term_id] = summary
+    return summary
+
+
+async def build_suggestions(
+    candidates: list[TermDocument],
+    llm_client_factory: Callable[[], LLMClient],
+) -> list[Suggestion]:
+    suggestions: list[Suggestion] = []
+    for term in sorted_candidate_terms(candidates):
+        suggestions.append(
+            Suggestion(
+                term_id=term.term_id,
+                term=term.term_name,
+                query=term.term_name,
+                summary=await summarize_term(term, llm_client_factory),
+                reason=None,
+            )
+        )
+    return suggestions
 
 
 async def stream_events(
@@ -239,7 +277,7 @@ async def stream_events(
 
         if result.status == "candidates" and result.candidates:
             suggested = True
-            suggestions = build_suggestions(result.candidates)
+            suggestions = await build_suggestions(result.candidates, llm_client_factory)
             yield sse(
                 EVENT_SUGGESTIONS,
                 SuggestionsData(

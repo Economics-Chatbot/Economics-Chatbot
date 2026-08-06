@@ -32,15 +32,24 @@ def matched(term: str) -> RetrievalResult:
 
 
 class FakeLLM(LLMClient):
+    summary_calls: dict[int, int] = {}
+    stream_calls = 0
+
     def __init__(self, chunks: list[str] | None = None, error: Exception | None = None):
         self.chunks = chunks or ["official definition", "\n<<<EASY>>>", "easy explanation", "\n<<<EXAMPLE>>>", "daily example"]
         self.error = error
 
     async def stream_answer(self, *, user_query: str, retrieval_result: RetrievalResult):
+        type(self).stream_calls += 1
         if self.error:
             raise self.error
         for chunk in self.chunks:
             yield chunk
+
+    async def summarize_term(self, *, term_name: str, official_definition: str) -> str:
+        term_id = int(official_definition.rsplit("#", 1)[-1]) if "#" in official_definition else 0
+        self.summary_calls[term_id] = self.summary_calls.get(term_id, 0) + 1
+        return f"{term_name} summary???."
 
 
 def test_matched_answer_stream_keeps_existing_sse_shape(monkeypatch) -> None:
@@ -88,21 +97,20 @@ def test_sse_delimiters_split_across_provider_chunks(monkeypatch) -> None:
 
 
 def test_suggestions_payload_is_structured_sse_and_not_markdown(monkeypatch) -> None:
-    called = False
+    from app.services import answers
 
-    def factory():
-        nonlocal called
-        called = True
-        raise AssertionError("suggestions must not call LLM")
+    answers.SUMMARY_CACHE.clear()
+    FakeLLM.summary_calls.clear()
+    FakeLLM.stream_calls = 0
 
     monkeypatch.setattr(answers_route, "retrieve", lambda query: RetrievalResult(
         status="candidates",
         candidates=[
-            TermDocument(2, "interest futures", "official", similarity=0.61),
-            TermDocument(3, "interest swap", "official", similarity=0.59),
+            TermDocument(2, "interest futures", "official #2", similarity=0.61),
+            TermDocument(3, "interest swap", "official #3", similarity=0.59),
         ],
     ))
-    use_factory(monkeypatch, factory)
+    use_factory(monkeypatch, lambda: FakeLLM())
     response = client.post("/api/answers", json={"query": "interest"})
     parsed = parse_events(response.text)
 
@@ -116,23 +124,23 @@ def test_suggestions_payload_is_structured_sse_and_not_markdown(monkeypatch) -> 
         "query": "interest",
         "count": 2,
         "suggestions": [
-            {"term_id": 2, "term": "interest futures", "query": "interest futures", "reason": None},
-            {"term_id": 3, "term": "interest swap", "query": "interest swap", "reason": None},
+            {"term_id": 2, "term": "interest futures", "query": "interest futures", "summary": "interest futures summary???.", "reason": None},
+            {"term_id": 3, "term": "interest swap", "query": "interest swap", "summary": "interest swap summary???.", "reason": None},
         ],
     }
     assert all(name != "delta" for name, _ in parsed)
     assert "- interest futures" not in response.text
-    assert not called
+    assert FakeLLM.stream_calls == 0
 
 
 def test_suggestions_are_limited_to_top3_and_sorted(monkeypatch) -> None:
     monkeypatch.setattr(answers_route, "retrieve", lambda query: RetrievalResult(
         status="candidates",
         candidates=[
-            TermDocument(4, "fourth", None, similarity=0.1),
-            TermDocument(1, "first", None, similarity=0.9),
-            TermDocument(3, "third", None, similarity=0.3),
-            TermDocument(2, "second", None, similarity=0.6),
+            TermDocument(4, "fourth", "official #4", similarity=0.1),
+            TermDocument(1, "first", "official #1", similarity=0.9),
+            TermDocument(3, "third", "official #3", similarity=0.3),
+            TermDocument(2, "second", "official #2", similarity=0.6),
         ],
     ))
     parsed = parse_events(client.post("/api/answers", json={"query": "ambiguous"}).text)
@@ -141,25 +149,45 @@ def test_suggestions_are_limited_to_top3_and_sorted(monkeypatch) -> None:
     assert [item["term_id"] for item in parsed[0][1]["suggestions"]] == [1, 2, 3]
 
 
-def test_suggestions_do_not_emit_answer_events_or_call_llm(monkeypatch) -> None:
-    called = False
+def test_suggestion_summary_is_cached_by_term_id(monkeypatch) -> None:
+    from app.services import answers
 
-    def factory():
-        nonlocal called
-        called = True
-        return FakeLLM()
+    answers.SUMMARY_CACHE.clear()
+    FakeLLM.summary_calls.clear()
+    monkeypatch.setattr(answers_route, "retrieve", lambda query: RetrievalResult(
+        status="candidates",
+        candidates=[TermDocument(7, "exchange rate", "official #7", similarity=0.8)],
+    ))
+    use_factory(monkeypatch, lambda: FakeLLM())
+
+    first = parse_events(client.post("/api/answers", json={"query": "exchange"}).text)
+    second = parse_events(client.post("/api/answers", json={"query": "exchange"}).text)
+
+    assert first[0][1]["suggestions"][0]["summary"] == "exchange rate summary???."
+    assert second[0][1]["suggestions"][0]["summary"] == "exchange rate summary???."
+    assert FakeLLM.summary_calls == {7: 1}
+    answers.SUMMARY_CACHE.clear()
+
+
+def test_suggestions_do_not_emit_answer_events_or_call_answer_stream(monkeypatch) -> None:
+    from app.services import answers
+
+    answers.SUMMARY_CACHE.clear()
+    FakeLLM.summary_calls.clear()
+    FakeLLM.stream_calls = 0
 
     monkeypatch.setattr(answers_route, "retrieve", lambda query: RetrievalResult(
         status="candidates",
-        candidates=[TermDocument(2, "inflation", "official")],
+        candidates=[TermDocument(2, "inflation", "official #2")],
     ))
-    use_factory(monkeypatch, factory)
+    use_factory(monkeypatch, lambda: FakeLLM())
     parsed = parse_events(client.post("/api/answers", json={"query": "prices"}).text)
 
     assert [name for name, _ in parsed] == ["suggestions", "done"]
     assert all(name not in {"answer_start", "delta", "answer_done"} for name, _ in parsed)
     assert parsed[-1][1]["status"] == "suggestions"
-    assert not called
+    assert FakeLLM.stream_calls == 0
+    assert FakeLLM.summary_calls == {2: 1}
 
 
 def test_failure_without_candidates_does_not_call_llm(monkeypatch) -> None:
@@ -236,7 +264,7 @@ def test_selected_term_id_payload_is_rejected() -> None:
 def test_done_event_is_sent_for_all_non_cancelled_branches(monkeypatch) -> None:
     scenarios = [
         ("matched", lambda query: matched(query)),
-        ("candidates", lambda query: RetrievalResult(status="candidates", candidates=[TermDocument(2, "candidate", "official")])),
+        ("candidates", lambda query: RetrievalResult(status="candidates", candidates=[TermDocument(2, "candidate", "official #2")])),
         ("not_found", lambda query: RetrievalResult(status="not_found")),
         ("retrieval_error", lambda query: (_ for _ in ()).throw(RuntimeError("boom"))),
     ]
@@ -248,18 +276,14 @@ def test_done_event_is_sent_for_all_non_cancelled_branches(monkeypatch) -> None:
         assert parsed[-1][0] == "done"
 
 
-def test_llm_factory_is_not_called_for_candidates_or_not_found(monkeypatch) -> None:
+def test_llm_factory_is_not_called_for_not_found(monkeypatch) -> None:
     def factory():
         raise AssertionError("LLM factory must not be called")
 
-    for result in [
-        RetrievalResult(status="candidates", candidates=[TermDocument(2, "candidate", "official")]),
-        RetrievalResult(status="not_found"),
-    ]:
-        monkeypatch.setattr(answers_route, "retrieve", lambda query, result=result: result)
-        use_factory(monkeypatch, factory)
-        parsed = parse_events(client.post("/api/answers", json={"query": "interest"}).text)
-        assert parsed[-1][0] == "done"
+    monkeypatch.setattr(answers_route, "retrieve", lambda query: RetrievalResult(status="not_found"))
+    use_factory(monkeypatch, factory)
+    parsed = parse_events(client.post("/api/answers", json={"query": "interest"}).text)
+    assert parsed[-1][0] == "done"
 
 
 def test_timeout_and_llm_error_are_safe(monkeypatch) -> None:

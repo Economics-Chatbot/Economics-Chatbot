@@ -802,3 +802,28 @@ html, body {
 .feedback-action-button:hover {
   background-color: #1d4ed8;
 }
+
+
+.ui-related-term-button--candidate {
+  display: flex;
+  min-height: 64px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+  text-align: left;
+}
+
+.candidate-term-name {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--color-deep-blue);
+}
+
+.candidate-term-summary {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}

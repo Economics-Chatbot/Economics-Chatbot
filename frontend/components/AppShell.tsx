@@ -187,12 +187,7 @@ export function AppShell() {
           }));
         },
         onSuggestions: (data) => {
-          setSuggestions(data.suggestions.map((suggestion, index) => ({
-            term_id: index,
-            term: suggestion.term,
-            query: data.query,
-            reason: suggestion.reason,
-          })));
+          setSuggestions(data.suggestions);
           setScreen("suggestions");
         },
         onFailure: (data) => {
@@ -351,9 +346,10 @@ export function AppShell() {
                   <RelatedKeywordChip
                     key={item.term_id}
                     variant="candidate"
-                    onClick={() => void submitQuestion(item.term)}
+                    onClick={() => void submitQuestion(item.query)}
                   >
-                    {item.term}
+                    <span className="candidate-term-name">{item.term}</span>
+                    <span className="candidate-term-summary">{item.summary}</span>
                   </RelatedKeywordChip>
                 ))}
               </div>

@@ -70,6 +70,7 @@ export type Suggestion = {
   term_id: number;
   term: string;
   query: string;
+  summary: string;
   reason?: string | null;
 };
 
