@@ -22,6 +22,15 @@ from app.services.llm import LLMClient, LLMError, LLMTimeoutError
 from app.services.retrieval import RetrievalResult, TermDocument
 
 DELTA_CHUNK_SIZE = 32
+MAX_SUGGESTIONS = 3
+
+EVENT_ANSWER_START = "answer_start"
+EVENT_DELTA = "delta"
+EVENT_ANSWER_DONE = "answer_done"
+EVENT_SUGGESTIONS = "suggestions"
+EVENT_FAILURE = "failure"
+EVENT_ERROR = "error"
+EVENT_DONE = "done"
 
 
 def sse(event: str, data: Any) -> str:
@@ -30,7 +39,7 @@ def sse(event: str, data: Any) -> str:
 
 
 def extract_terms(query: str) -> list[str]:
-    terms = [part.strip(" .,?？！") for part in re.split(r"\s*(?:,|，|및|그리고)\s*", query)]
+    terms = [part.strip(" .,?\uff1f\uff01") for part in re.split(r"\s*(?:,|\uff0c|\ubc0f|\uadf8\ub9ac\uace0)\s*", query)]
     return [term for term in terms if term]
 
 
@@ -47,7 +56,7 @@ def _parse_answer(term: str, text: str, related_keywords: list[str]) -> Answer:
         easy_explanation=easy.strip(),
         example=example.strip(),
         related_keywords=related_keywords,
-        sources=[Source(title="한국은행 경제금융용어 800선")],
+        sources=[Source(title="\ud55c\uad6d\uc740\ud589 \uacbd\uc81c\uae08\uc735\uc6a9\uc5b4 800\uc120")],
     )
 
 
@@ -131,7 +140,7 @@ async def _stream_term(
     llm_client: LLMClient,
 ) -> AsyncIterator[str]:
     yield sse(
-        "answer_start",
+        EVENT_ANSWER_START,
         AnswerStartData(index=index, term=term.term_name, related_keywords=term.related_terms),
     )
     chunks: list[str] = []
@@ -146,29 +155,50 @@ async def _stream_term(
             chunks.append(chunk)
             for section, visible in section_streamer.feed(chunk):
                 for batched_section, text in delta_batcher.feed(section, visible):
-                    yield sse("delta", DeltaData(index=index, section=batched_section, text=text))
+                    yield sse(EVENT_DELTA, DeltaData(index=index, section=batched_section, text=text))
         for section, visible in section_streamer.finish():
             for batched_section, text in delta_batcher.feed(section, visible):
-                yield sse("delta", DeltaData(index=index, section=batched_section, text=text))
+                yield sse(EVENT_DELTA, DeltaData(index=index, section=batched_section, text=text))
         for section, text in delta_batcher.finish():
-            yield sse("delta", DeltaData(index=index, section=section, text=text))
+            yield sse(EVENT_DELTA, DeltaData(index=index, section=section, text=text))
         answer = _parse_answer(term.term_name, "".join(chunks), term.related_terms)
     except asyncio.CancelledError:
         raise
     except LLMTimeoutError:
-        yield sse("error", ErrorData(index=index, code="llm_timeout", message="답변 생성 시간이 초과되었습니다.", retryable=True))
+        yield sse(EVENT_ERROR, ErrorData(index=index, code="llm_timeout", message="\ub2f5\ubcc0 \uc0dd\uc131 \uc2dc\uac04\uc774 \ucd08\uacfc\ub418\uc5c8\uc2b5\ub2c8\ub2e4.", retryable=True))
         return
     except LLMError:
-        yield sse("error", ErrorData(index=index, code="llm_error", message="답변 생성 중 오류가 발생했습니다.", retryable=True))
+        yield sse(EVENT_ERROR, ErrorData(index=index, code="llm_error", message="\ub2f5\ubcc0 \uc0dd\uc131 \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4.", retryable=True))
         return
     except ValueError:
-        yield sse("error", ErrorData(index=index, code="answer_generation_failed", message="답변 형식이 올바르지 않습니다."))
+        yield sse(EVENT_ERROR, ErrorData(index=index, code="answer_generation_failed", message="\ub2f5\ubcc0 \ud615\uc2dd\uc774 \uc62c\ubc14\ub974\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4."))
         return
     except Exception:
-        yield sse("error", ErrorData(index=index, code="answer_generation_failed", message="답변 생성 중 오류가 발생했습니다."))
+        yield sse(EVENT_ERROR, ErrorData(index=index, code="answer_generation_failed", message="\ub2f5\ubcc0 \uc0dd\uc131 \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4."))
         return
 
-    yield sse("answer_done", AnswerDoneData(index=index, answer=answer))
+    yield sse(EVENT_ANSWER_DONE, AnswerDoneData(index=index, answer=answer))
+
+
+def should_call_llm(result: RetrievalResult) -> bool:
+    return result.status == "matched" and bool(result.terms) and bool(result.terms[0].official_definition)
+
+
+def build_suggestions(candidates: list[TermDocument]) -> list[Suggestion]:
+    sorted_candidates = sorted(
+        candidates,
+        key=lambda term: term.similarity if term.similarity is not None else -1.0,
+        reverse=True,
+    )[:MAX_SUGGESTIONS]
+    return [
+        Suggestion(
+            term_id=term.term_id,
+            term=term.term_name,
+            query=term.term_name,
+            reason=None,
+        )
+        for term in sorted_candidates
+    ]
 
 
 async def stream_events(
@@ -189,32 +219,40 @@ async def stream_events(
             raise
         except Exception:
             errors.append(index)
-            yield sse("error", ErrorData(index=index, code="retrieval_failed", message="검색 처리 중 오류가 발생했습니다."))
+            yield sse(EVENT_ERROR, ErrorData(index=index, code="retrieval_failed", message="\uac80\uc0c9 \ucc98\ub9ac \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4."))
             continue
 
-        if result.status == "candidates":
+        if should_call_llm(result):
+            before_errors = len(errors)
+            async for event in _stream_term(
+                query=query,
+                index=index,
+                term=result.terms[0],
+                llm_client=llm_client_factory(),
+            ):
+                yield event
+                if event.startswith(f"event: {EVENT_ERROR}"):
+                    errors.append(index)
+            if len(errors) == before_errors:
+                completed.append(index)
+            continue
+
+        if result.status == "candidates" and result.candidates:
             suggested = True
-            suggestions = [Suggestion(term=item.term_name) for item in result.candidates]
-            yield sse("suggestions", SuggestionsData(index=index, term=term_text, suggestions=suggestions))
+            suggestions = build_suggestions(result.candidates)
+            yield sse(
+                EVENT_SUGGESTIONS,
+                SuggestionsData(
+                    index=index,
+                    query=term_text,
+                    count=len(suggestions),
+                    suggestions=suggestions,
+                ),
+            )
             continue
 
-        if result.status != "matched" or not result.terms or not result.terms[0].official_definition:
-            failed.append(index)
-            yield sse("failure", FailureData(index=index, term=term_text, reason="not_found", message="일치하는 경제용어를 찾지 못했습니다."))
-            continue
-
-        before_errors = len(errors)
-        async for event in _stream_term(
-            query=query,
-            index=index,
-            term=result.terms[0],
-            llm_client=llm_client_factory(),
-        ):
-            yield event
-            if event.startswith("event: error"):
-                errors.append(index)
-        if len(errors) == before_errors:
-            completed.append(index)
+        failed.append(index)
+        yield sse(EVENT_FAILURE, FailureData(index=index, term=term_text, reason="not_found", message="\uc77c\uce58\ud558\ub294 \uacbd\uc81c\uc6a9\uc5b4\ub97c \ucc3e\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4."))
 
     if completed and (failed or errors):
         status = "partial"
@@ -226,4 +264,4 @@ async def stream_events(
         status = "suggestions"
     else:
         status = "failed"
-    yield sse("done", DoneData(status=status, completed_indices=completed, failed_indices=failed + errors))
+    yield sse(EVENT_DONE, DoneData(status=status, completed_indices=completed, failed_indices=failed + errors))

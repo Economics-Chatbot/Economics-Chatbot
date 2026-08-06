@@ -11,6 +11,8 @@ AnswerSection = Literal["one_line_definition", "easy_explanation", "example"]
 class AnswerRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2_000)
 
+    model_config = {"extra": "forbid"}
+
 
 class Source(BaseModel):
     title: str
@@ -44,13 +46,18 @@ class AnswerDoneData(BaseModel):
 
 
 class Suggestion(BaseModel):
+    term_id: int
     term: str
+    query: str
     reason: str | None = None
 
 
 class SuggestionsData(BaseModel):
+    version: Literal[1] = 1
+    status: Literal["candidates"] = "candidates"
     index: int = Field(ge=0)
-    term: str
+    query: str
+    count: int = Field(ge=0)
     suggestions: list[Suggestion]
 
 
