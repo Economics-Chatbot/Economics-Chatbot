@@ -184,6 +184,16 @@ export function AppShell() {
           </button>
         )}
         <div className="ui-header-brand">EconomyMate</div>
+        <div className="ui-header-jelly-button" title="옐로 메이트">
+          <Image
+            src="/assets/character-default.png"
+            alt="노란 젤리 메이트"
+            width={32}
+            height={32}
+            className="ui-header-jelly-img"
+            unoptimized
+          />
+        </div>
       </header>
 
       {/* 캐릭터 스테이지 & 3D 장식들 */}
@@ -242,15 +252,17 @@ export function AppShell() {
 
       {/* 시작 화면 전용 */}
       <div className="home-only">
-        <div className="chunk-home-intro">
-          <h1 className="type-home-title">
-            {"궁금한 경제용어,\n편하게 물어보세요"}
-          </h1>
+        <div className="home-content-wrapper">
+          <div className="chunk-home-intro">
+            <h1 className="type-home-title">
+              {"궁금한 경제용어,\n편하게 물어보세요"}
+            </h1>
+          </div>
+
+          <div className="chunk-home-guide">어려운 경제를 쉽고 친근하게 설명해드릴게요.</div>
+
+          <SuggestedQuestions items={HOME_SUGGESTIONS} onSelect={handleSuggestionClick} />
         </div>
-
-        <div className="chunk-home-guide">어려운 경제를 쉽고 친근하게 설명해드릴게요.</div>
-
-        <SuggestedQuestions items={HOME_SUGGESTIONS} onSelect={handleSuggestionClick} />
       </div>
 
       {/* 모든 질문 결과 화면 (성공, 후보, 실패, 에러 포함) */}

@@ -99,6 +99,32 @@ html, body {
 .ui-header-back-button { left: 0; }
 .ui-header-info-button { right: 0; }
 
+.ui-header-jelly-button {
+  position: absolute;
+  right: 0;
+  top: 2px;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 150ms ease;
+  filter: drop-shadow(0 2px 6px rgba(37, 99, 235, 0.2));
+}
+
+.ui-header-jelly-button:hover {
+  transform: scale(1.12);
+}
+
+.ui-header-jelly-img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+
 /* 캐릭터 스테이지 CHUNK_CHARACTER_STAGE & 3D 장식 요소들 */
 .chunk-character-stage {
   position: absolute;
@@ -168,9 +194,10 @@ html, body {
 .stage-decorations {
   position: absolute;
   top: 135px;
-  left: 0;
-  width: 100%;
+  left: 50%;
+  width: 390px;
   height: 210px;
+  transform: translateX(-50%);
   pointer-events: none;
   transition: opacity 200ms ease;
 }
@@ -280,7 +307,21 @@ html, body {
 
 /* 홈 레이아웃 */
 .home-only {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  z-index: 10;
   transition: opacity 150ms ease-out;
+  scrollbar-width: none;
+  overscroll-behavior: contain;
+}
+
+.home-only::-webkit-scrollbar {
+  display: none;
 }
 
 .app[data-screen="query-transition"] .home-only,
@@ -289,13 +330,23 @@ html, body {
   pointer-events: none;
 }
 
+.home-content-wrapper {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+  padding-top: 350px;
+  padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 /* 메인 타이틀 CHUNK_HOME_INTRO */
 .chunk-home-intro {
-  position: absolute;
-  left: 30px;
-  top: 360px;
+  position: relative;
   width: calc(100% - 60px);
   text-align: center;
+  margin-bottom: 12px;
 }
 
 .type-home-title {
@@ -310,21 +361,18 @@ html, body {
 
 /* 서브 설명 CHUNK_HOME_GUIDE */
 .chunk-home-guide {
-  position: absolute;
-  left: 30px;
-  top: 442px;
+  position: relative;
   width: calc(100% - 60px);
   text-align: center;
   font-size: 14px;
   line-height: 20px;
   color: #64748b;
+  margin-bottom: 24px;
 }
 
 /* 추천 질문 세션 CHUNK_HOME_SUGGESTIONS */
 .chunk-home-suggestions {
-  position: absolute;
-  left: 24px;
-  top: 490px;
+  position: relative;
   width: calc(100% - 48px);
   display: flex;
   flex-direction: column;
@@ -512,12 +560,46 @@ html, body {
   padding: 0 4px 16px;
 }
 
+.ui-term-eyebrow-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
 .ui-term-eyebrow {
   font-size: 13px;
   line-height: 20px;
   font-weight: 600;
   color: var(--color-deep-blue);
-  margin-bottom: 4px;
+}
+
+.ui-copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  color: var(--color-deep-blue);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  transition: all 150ms ease;
+}
+
+.ui-copy-button:hover {
+  background-color: #e0f2fe;
+  border-color: var(--color-main-blue);
+  color: var(--color-main-blue);
+}
+
+.ui-copy-button.copied {
+  background-color: #dcfce7;
+  border-color: #22c55e;
+  color: #15803d;
 }
 
 .ui-term-name {
