@@ -73,6 +73,7 @@ def _valid_candidates(parenthetical: str, term_name: str) -> list[str]:
     for candidate in re.split(r"[,，;；]", parenthetical):
         candidate = re.sub(r"\s+", " ", candidate.strip())
         candidate = re.sub(r"^(?:또는|혹은|일명|즉|약칭)\s+", "", candidate)
+        candidate = re.sub(r"^[\uac00-\ud7a3]+\s+([A-Za-z])", r"\1", candidate)
         if _is_search_name(candidate, term_name) and candidate not in candidates:
             candidates.append(candidate)
     return candidates
@@ -91,6 +92,8 @@ def _is_search_name(candidate: str, term_name: str) -> bool:
     if not re.search(r"[A-Za-z가-힣]", candidate):
         return False
     if re.fullmatch(r"[A-Z][A-Z0-9-]*", candidate):
+        return True
+    if re.fullmatch(r"[A-Z][a-z]+", candidate):
         return True
     if re.fullmatch(r"[A-Za-z]+(?:[ -][A-Za-z]+)+", candidate):
         return True
